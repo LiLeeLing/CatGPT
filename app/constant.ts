@@ -59,7 +59,8 @@ export const UNFINISHED_INPUT = (id: string) => "unfinished-input-" + id;
 
 export const STORAGE_KEY = "chatgpt-next-web";
 
-export const REQUEST_TIMEOUT_MS = 60000;
+// export const REQUEST_TIMEOUT_MS = 60000;
+export const REQUEST_TIMEOUT_MS = 180000;
 
 export const EXPORT_MESSAGE_CLASS_NAME = "export-markdown";
 
@@ -76,6 +77,9 @@ export enum ModelProvider {
 
 export const OpenaiPath = {
   ChatPath: "v1/chat/completions",
+  createImgPath: "v1/images/generations",
+  createEditPath: "v1/images/edits",
+  createVariationionsPath: "v1/images/variations",
   UsagePath: "dashboard/billing/usage",
   SubsPath: "dashboard/billing/subscription",
   ListModelPath: "v1/models",
@@ -201,6 +205,24 @@ export const DEFAULT_MODELS = [
   },
   {
     name: "gpt-4-vision-preview",
+    available: true,
+    provider: {
+      id: "openai",
+      providerName: "OpenAI",
+      providerType: "openai",
+    },
+  },
+  {
+    name: "dall-e-2",
+    available: true,
+    provider: {
+      id: "openai",
+      providerName: "OpenAI",
+      providerType: "openai",
+    },
+  },
+  {
+    name: "dall-e-3",
     available: true,
     provider: {
       id: "openai",
