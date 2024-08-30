@@ -8,8 +8,8 @@
     "withGlobalTauri": true
   },
   "package": {
-    "version": "2.14.2"
     "productName": "CatGPT",
+    "version": "2.14.2"
   },
   "tauri": {
     "allowlist": {
