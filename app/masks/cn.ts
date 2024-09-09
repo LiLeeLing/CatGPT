@@ -709,7 +709,7 @@ avatar: "gpt-bot",
     },
     lang: "cn",
     builtin: true,
-    createdAt: 1688899480537,
+    createdAt: 1688899480538,
   },
   {
     avatar: "1f513",
