@@ -33,17 +33,12 @@ import {
   LLMModel,
   LLMUsage,
   MultimodalContent,
+  SpeechOptions,
 } from "../api";
 import Locale from "../../locales";
-import {
-  EventStreamContentType,
-  fetchEventSource,
-} from "@fortaine/fetch-event-source";
-import { prettyObject } from "@/app/utils/format";
 import { getClientConfig } from "@/app/config/client";
 import {
   getMessageTextContent,
-  getMessageImages,
   isVisionModel,
   isDalle3 as _isDalle3,
 } from "@/app/utils";
@@ -147,6 +142,44 @@ export class ChatGPTApi implements LLMApi {
     return res.choices?.at(0)?.message?.content ?? res;
   }
 
+  async speech(options: SpeechOptions): Promise<ArrayBuffer> {
+    const requestPayload = {
+      model: options.model,
+      input: options.input,
+      voice: options.voice,
+      response_format: options.response_format,
+      speed: options.speed,
+    };
+
+    console.log("[Request] openai speech payload: ", requestPayload);
+
+    const controller = new AbortController();
+    options.onController?.(controller);
+
+    try {
+      const speechPath = this.path(OpenaiPath.SpeechPath);
+      const speechPayload = {
+        method: "POST",
+        body: JSON.stringify(requestPayload),
+        signal: controller.signal,
+        headers: getHeaders(),
+      };
+
+      // make a fetch request
+      const requestTimeoutId = setTimeout(
+        () => controller.abort(),
+        REQUEST_TIMEOUT_MS,
+      );
+
+      const res = await fetch(speechPath, speechPayload);
+      clearTimeout(requestTimeoutId);
+      return await res.arrayBuffer();
+    } catch (e) {
+      console.log("[Request] failed to make a speech request", e);
+      throw e;
+    }
+  }
+
   async chat(options: ChatOptions) {
     const modelConfig = {
       ...useAppConfig.getState().modelConfig,
@@ -160,6 +193,7 @@ export class ChatGPTApi implements LLMApi {
     let requestPayload: RequestPayload | DalleRequestPayload;
 
     const isDalle3 = _isDalle3(options.config.model);
+    const isO1 = options.config.model.startsWith("o1");
     if (isDalle3) {
       const prompt = getMessageTextContent(
         options.messages.slice(-1)?.pop() as any,
@@ -181,30 +215,32 @@ export class ChatGPTApi implements LLMApi {
         const content = visionModel
           ? await preProcessImageContent(v.content)
           : getMessageTextContent(v);
-        messages.push({ role: v.role, content });
+        if (!(isO1 && v.role === "system"))
+          messages.push({ role: v.role, content });
       }
 
+      // O1 not support image, tools (plugin in ChatGPTNextWeb) and system, stream, logprobs, temperature, top_p, n, presence_penalty, frequency_penalty yet.
       requestPayload = {
         messages,
-        stream: options.config.stream,
+        stream: !isO1 ? options.config.stream : false,
         model: modelConfig.model,
-        temperature: modelConfig.temperature,
-        presence_penalty: modelConfig.presence_penalty,
-        frequency_penalty: modelConfig.frequency_penalty,
-        top_p: modelConfig.top_p,
+        temperature: !isO1 ? modelConfig.temperature : 1,
+        presence_penalty: !isO1 ? modelConfig.presence_penalty : 0,
+        frequency_penalty: !isO1 ? modelConfig.frequency_penalty : 0,
+        top_p: !isO1 ? modelConfig.top_p : 1,
         // max_tokens: Math.max(modelConfig.max_tokens, 1024),
         // Please do not ask me why not send max_tokens, no reason, this param is just shit, I dont want to explain anymore.
       };
 
       // add max_tokens to vision model
-      if (visionModel && modelConfig.model.includes("preview")) {
+      if (visionModel) {
         requestPayload["max_tokens"] = Math.max(modelConfig.max_tokens, 4000);
       }
     }
 
     console.log("[Request] openai payload: ", requestPayload);
 
-    const shouldStream = !isDalle3 && !!options.config.stream;
+    const shouldStream = !isDalle3 && !!options.config.stream && !isO1;
     const controller = new AbortController();
     options.onController?.(controller);
 
@@ -241,6 +277,7 @@ export class ChatGPTApi implements LLMApi {
         );
       }
       if (shouldStream) {
+        let index = -1;
         const [tools, funcs] = usePluginStore
           .getState()
           .getAsTools(
@@ -266,10 +303,10 @@ export class ChatGPTApi implements LLMApi {
             }>;
             const tool_calls = choices[0]?.delta?.tool_calls;
             if (tool_calls?.length > 0) {
-              const index = tool_calls[0]?.index;
               const id = tool_calls[0]?.id;
               const args = tool_calls[0]?.function?.arguments;
               if (id) {
+                index += 1;
                 runTools.push({
                   id,
                   type: tool_calls[0]?.type,
@@ -291,6 +328,8 @@ export class ChatGPTApi implements LLMApi {
             toolCallMessage: any,
             toolCallResult: any[],
           ) => {
+            // reset index value
+            index = -1;
             // @ts-ignore
             requestPayload?.messages?.splice(
               // @ts-ignore
@@ -313,7 +352,7 @@ export class ChatGPTApi implements LLMApi {
         // make a fetch request
         const requestTimeoutId = setTimeout(
           () => controller.abort(),
-          isDalle3 ? REQUEST_TIMEOUT_MS * 2 : REQUEST_TIMEOUT_MS, // dalle3 using b64_json is slow.
+          isDalle3 || isO1 ? REQUEST_TIMEOUT_MS * 2 : REQUEST_TIMEOUT_MS, // dalle3 using b64_json is slow.
         );
 
         const res = await fetch(chatPath, chatPayload);

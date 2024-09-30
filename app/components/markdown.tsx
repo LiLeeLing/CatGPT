@@ -22,6 +22,8 @@ import {
 import { useChatStore } from "../store";
 import { IconButton } from "./button";
 
+import { useAppConfig } from "../store/config";
+
 export function Mermaid(props: { code: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [hasError, setHasError] = useState(false);
@@ -92,7 +94,9 @@ export function PreCode(props: { children: any }) {
     }
   }, 600);
 
-  const enableArtifacts = session.mask?.enableArtifacts !== false;
+  const config = useAppConfig();
+  const enableArtifacts =
+    session.mask?.enableArtifacts !== false && config.enableArtifacts;
 
   //Wrap the paragraph for plain-text
   useEffect(() => {
@@ -128,8 +132,9 @@ export function PreCode(props: { children: any }) {
           className="copy-code-button"
           onClick={() => {
             if (ref.current) {
-              const code = ref.current.innerText;
-              copyToClipboard(code);
+              copyToClipboard(
+                ref.current.querySelector("code")?.innerText ?? "",
+              );
             }
           }}
         ></span>
@@ -237,9 +242,26 @@ function escapeBrackets(text: string) {
   );
 }
 
+function tryWrapHtmlCode(text: string) {
+  // try add wrap html code (fixed: html codeblock include 2 newline)
+  return text
+    .replace(
+      /([`]*?)(\w*?)([\n\r]*?)(<!DOCTYPE html>)/g,
+      (match, quoteStart, lang, newLine, doctype) => {
+        return !quoteStart ? "\n```html\n" + doctype : match;
+      },
+    )
+    .replace(
+      /(<\/body>)([\r\n\s]*?)(<\/html>)([\n\r]*)([`]*)([\n\r]*?)/g,
+      (match, bodyEnd, space, htmlEnd, newLine, quoteEnd) => {
+        return !quoteEnd ? bodyEnd + space + htmlEnd + "\n```\n" : match;
+      },
+    );
+}
+
 function _MarkDownContent(props: { content: string }) {
   const escapedContent = useMemo(() => {
-    return escapeBrackets(escapeDollarNumber(props.content));
+    return tryWrapHtmlCode(escapeBrackets(escapeDollarNumber(props.content)));
   }, [props.content]);
 
   return (
@@ -261,6 +283,20 @@ function _MarkDownContent(props: { content: string }) {
         p: (pProps) => <p {...pProps} dir="auto" />,
         a: (aProps) => {
           const href = aProps.href || "";
+          if (/\.(aac|mp3|opus|wav)$/.test(href)) {
+            return (
+              <figure>
+                <audio controls src={href}></audio>
+              </figure>
+            );
+          }
+          if (/\.(3gp|3g2|webm|ogv|mpeg|mp4|avi)$/.test(href)) {
+            return (
+              <video controls width="99.9%">
+                <source src={href} />
+              </video>
+            );
+          }
           const isInternal = /^\/#/i.test(href);
           const target = isInternal ? "_self" : aProps.target ?? "_blank";
           return <a {...aProps} target={target} />;

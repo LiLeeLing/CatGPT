@@ -1,5 +1,3 @@
-import path from "path";
-
 export const OWNER = "ChatGPTNextWeb";
 export const REPO = "ChatGPT-Next-Web";
 export const REPO_URL = `https://github.com/${OWNER}/${REPO}`;
@@ -152,6 +150,7 @@ export const Anthropic = {
 
 export const OpenaiPath = {
   ChatPath: "v1/chat/completions",
+  SpeechPath: "v1/audio/speech",
   ImagePath: "v1/images/generations",
   UsagePath: "dashboard/billing/usage",
   SubsPath: "dashboard/billing/subscription",
@@ -250,11 +249,27 @@ export const KnowledgeCutOffDate: Record<string, string> = {
   "gpt-4o-mini": "2023-10",
   "gpt-4o-mini-2024-07-18": "2023-10",
   "gpt-4-vision-preview": "2023-04",
+  "o1-mini": "2023-10",
+  "o1-preview": "2023-10",
   // After improvements,
   // it's now easier to add "KnowledgeCutOffDate" instead of stupid hardcoding it, as was done previously.
   "gemini-pro": "2023-12",
   "gemini-pro-vision": "2023-12",
 };
+
+export const DEFAULT_TTS_ENGINE = "OpenAI-TTS";
+export const DEFAULT_TTS_ENGINES = ["OpenAI-TTS", "Edge-TTS"];
+export const DEFAULT_TTS_MODEL = "tts-1";
+export const DEFAULT_TTS_VOICE = "alloy";
+export const DEFAULT_TTS_MODELS = ["tts-1", "tts-1-hd"];
+export const DEFAULT_TTS_VOICES = [
+  "alloy",
+  "echo",
+  "fable",
+  "onyx",
+  "nova",
+  "shimmer",
+];
 
 const openaiModels = [
   "gpt-3.5-turbo",
@@ -276,6 +291,8 @@ const openaiModels = [
   "gpt-4-turbo-2024-04-09",
   "gpt-4-1106-preview",
   "dall-e-3",
+  "o1-mini",
+  "o1-preview",
 ];
 
 const googleModels = [
@@ -484,3 +501,6 @@ export const PLUGINS = [
   { name: "Stable Diffusion", path: Path.Sd },
   { name: "Search Chat", path: Path.SearchChat },
 ];
+
+export const SAAS_CHAT_URL = "https://nextchat.dev/chat";
+export const SAAS_CHAT_UTM_URL = "https://nextchat.dev/chat?utm=github";
