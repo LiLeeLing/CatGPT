@@ -8,8 +8,13 @@
     "withGlobalTauri": true
   },
   "package": {
+<<<<<<< HEAD
     "productName": "CatGPT",
-    "version": "2.15.8"
+    "version": "2.15.6"
+=======
+    "productName": "NextChat",
+    "version": "2.15.7"
+>>>>>>> origin-merge/main
   },
   "tauri": {
     "allowlist": {
