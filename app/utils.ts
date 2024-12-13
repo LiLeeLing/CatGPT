@@ -269,10 +269,9 @@ export function isVisionModel(model: string) {
     model.includes("gpt-4-turbo") && !model.includes("preview");
 
   return (
-    !excludeKeywords.some((keyword) => model.includes(keyword)) &&
-    (visionKeywords.some((keyword) => model.includes(keyword)) ||
-      isGpt4Turbo ||
-      isDalle3(model))
+    visionKeywords.some((keyword) => model.includes(keyword)) ||
+    isGpt4Turbo ||
+    isDalle3(model)
   );
 }
 

@@ -358,7 +358,7 @@ export const useChatStore = createPersistStore(
           session.messages = session.messages.concat();
           session.lastUpdate = Date.now();
         });
-        get().updateStat(message, targetSession);
+        get().updateStat(message);
         get().summarizeSession(false, targetSession);
       },
 
@@ -429,7 +429,6 @@ export const useChatStore = createPersistStore(
             botMessage.streaming = false;
             if (message) {
               botMessage.content = message;
-              botMessage.date = new Date().toLocaleString();
               get().onNewMessage(botMessage, session);
             }
             ChatControllerPool.remove(session.id, botMessage.id);
@@ -743,6 +742,16 @@ export const useChatStore = createPersistStore(
           session.stat.charCount += message.content.length;
           // TODO: should update chat count and word count
         });
+      },
+      updateTargetSession(
+        targetSession: ChatSession,
+        updater: (session: ChatSession) => void,
+      ) {
+        const sessions = get().sessions;
+        const index = sessions.findIndex((s) => s.id === targetSession.id);
+        if (index < 0) return;
+        updater(sessions[index]);
+        set(() => ({ sessions }));
       },
       updateTargetSession(
         targetSession: ChatSession,
