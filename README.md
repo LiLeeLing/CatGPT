@@ -1,8 +1,5 @@
 <div align="center">
 
-<a href='https://nextchat.dev/chat'>
-  <img src="https://github.com/user-attachments/assets/287c510f-f508-478e-ade3-54d30453dc18" width="1000" alt="icon"/>
-</a>
 
 
 <h1 align="center">NextChat (ChatGPT Next Web)</h1>
