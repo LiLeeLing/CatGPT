@@ -1669,23 +1669,7 @@ function _Chat() {
               {Locale.Chat.SubTitle(session.messages.length)}
             </div>
           </div>
-          <div className="window-header-sub-title">
-            {Locale.Chat.SubTitle(session.messages.length)}
-          </div>
-        </div>
         <div className="window-actions">
-          <div className="window-action-button">
-            <IconButton
-              icon={<ReloadIcon />}
-              bordered
-              title={Locale.Chat.Actions.RefreshTitle}
-              onClick={() => {
-                showToast(Locale.Chat.Actions.RefreshToast);
-                chatStore.summarizeSession(true, session);
-              }}
-            />
-          </div>
-          {!isMobileScreen && (
             <div className="window-action-button">
               <IconButton
                 icon={<ReloadIcon />}
