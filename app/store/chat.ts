@@ -11,6 +11,7 @@ import type {
   ClientApi,
   MultimodalContent,
   RequestMessage,
+  UploadFile,
 } from "../client/api";
 import { getClientApi } from "../client/api";
 import { ChatControllerPool } from "../client/controller";
@@ -29,6 +30,7 @@ import {
   SUMMARIZE_MODEL,
 } from "../constant";
 import Locale, { getLang } from "../locales";
+import { isDalle3, safeLocalStorage, readFileContent } from "../utils";
 import { prettyObject } from "../utils/format";
 import { createPersistStore } from "../utils/store";
 import { estimateTokenLength } from "../utils/token";
@@ -405,17 +407,54 @@ export const useChatStore = createPersistStore(
       },
 
       async onUserInput(
+
         content: string,
+
         attachImages?: string[],
         isMcpResponse?: boolean,
+      ,
+        attachFiles?: UploadFile[],
       ) {
         const session = get().currentSession();
         const modelConfig = session.mask.modelConfig;
 
+        //read file content from the url
         // MCP Response no need to fill template
         let mContent: string | MultimodalContent[] = isMcpResponse
           ? content
           : fillTemplateWith(content, modelConfig);
+        let displayContent: string | MultimodalContent[] = userContent;
+        displayContent = [
+          {
+            type: "text",
+            text: userContent,
+          },
+        ];
+
+        if (attachFiles && attachFiles.length > 0) {
+          let fileContent = userContent + " Here are the files: \n";
+          for (let i = 0; i < attachFiles.length; i++) {
+            fileContent += attachFiles[i].name + "\n";
+            fileContent += await readFileContent(attachFiles[i]);
+          }
+          mContent = [
+            {
+              type: "text",
+              text: fileContent,
+            },
+          ];
+          displayContent = displayContent.concat(
+            attachFiles.map((file) => {
+              return {
+                type: "file_url",
+                file_url: {
+                  url: file.url,
+                  name: file.name,
+                  tokenCount: file.tokenCount,
+                },
+              };
+            }),
+          );
 
         if (!isMcpResponse && attachImages && attachImages.length > 0) {
           mContent = [
@@ -448,7 +487,8 @@ export const useChatStore = createPersistStore(
         get().updateTargetSession(session, (session) => {
           const savedUserMessage = {
             ...userMessage,
-            content: mContent,
+            //content: mContent,
+            content: displayContent,
           };
           session.messages = session.messages.concat([
             savedUserMessage,

@@ -48,6 +48,7 @@ import PluginIcon from "../icons/plugin.svg";
 import ShortcutkeyIcon from "../icons/shortcutkey.svg";
 import McpToolIcon from "../icons/tool.svg";
 import HeadphoneIcon from "../icons/headphone.svg";
+import UploadDocIcon from "../icons/upload-doc.svg";
 import {
   BOT_HELLO,
   ChatMessage,
@@ -66,6 +67,7 @@ import {
   autoGrowTextArea,
   copyToClipboard,
   getMessageImages,
+  getMessageFiles,
   getMessageTextContent,
   isDalle3,
   isVisionModel,
@@ -75,9 +77,13 @@ import {
   useMobileScreen,
   selectOrCopy,
   showPlugins,
+  countTokens,
 } from "../utils";
 
+import type { UploadFile } from "../client/api";
+
 import { uploadImage as uploadImageRemote } from "@/app/utils/chat";
+import { uploadImage as uploadFileRemote } from "@/app/utils/chat";
 
 import dynamic from "next/dynamic";
 
@@ -99,6 +105,8 @@ import {
   showToast,
 } from "./ui-lib";
 import { useNavigate } from "react-router-dom";
+import { FileIcon, defaultStyles } from "react-file-icon";
+import type { DefaultExtensionType } from "react-file-icon";
 import {
   CHAT_PAGE_SIZE,
   DEFAULT_TTS_ENGINE,
@@ -492,8 +500,10 @@ function useScrollToBottom(
 }
 
 export function ChatActions(props: {
+  uploadDocument: () => void;
   uploadImage: () => void;
   setAttachImages: (images: string[]) => void;
+  setAttachFiles: (files: UploadFile[]) => void;
   setUploading: (uploading: boolean) => void;
   showPromptModal: () => void;
   scrollToBottom: () => void;
@@ -621,28 +631,33 @@ export function ChatActions(props: {
           />
         )}
 
-        {showUploadImage && (
-          <ChatAction
-            onClick={props.uploadImage}
-            text={Locale.Chat.InputActions.UploadImage}
-            icon={props.uploading ? <LoadingButtonIcon /> : <ImageIcon />}
-          />
-        )}
+      {showUploadImage && (
         <ChatAction
-          onClick={nextTheme}
-          text={Locale.Chat.InputActions.Theme[theme]}
-          icon={
-            <>
-              {theme === Theme.Auto ? (
-                <AutoIcon />
-              ) : theme === Theme.Light ? (
-                <LightIcon />
-              ) : theme === Theme.Dark ? (
-                <DarkIcon />
-              ) : null}
-            </>
-          }
+          onClick={props.uploadImage}
+          text={Locale.Chat.InputActions.UploadImage}
+          icon={props.uploading ? <LoadingButtonIcon /> : <ImageIcon />}
         />
+      )}
+      <ChatAction
+        onClick={props.uploadDocument}
+        text={"Upload Plain Text File"}
+        icon={props.uploading ? <LoadingButtonIcon /> : <UploadDocIcon />}
+      />
+      <ChatAction
+        onClick={nextTheme}
+        text={Locale.Chat.InputActions.Theme[theme]}
+        icon={
+          <>
+            {theme === Theme.Auto ? (
+              <AutoIcon />
+            ) : theme === Theme.Light ? (
+              <LightIcon />
+            ) : theme === Theme.Dark ? (
+              <DarkIcon />
+            ) : null}
+          </>
+        }
+      />
 
         <ChatAction
           onClick={props.showPromptHints}
@@ -1032,6 +1047,7 @@ function _Chat() {
   const isMobileScreen = useMobileScreen();
   const navigate = useNavigate();
   const [attachImages, setAttachImages] = useState<string[]>([]);
+  const [attachFiles, setAttachFiles] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
 
   // prompt hints
@@ -1113,9 +1129,10 @@ function _Chat() {
     }
     setIsLoading(true);
     chatStore
-      .onUserInput(userInput, attachImages)
+      .onUserInput(userInput, attachImages, attachFiles)
       .then(() => setIsLoading(false));
     setAttachImages([]);
+    setAttachFiles([]);
     chatStore.setLastInput(userInput);
     setUserInput("");
     setPromptHints([]);
@@ -1266,7 +1283,9 @@ function _Chat() {
     setIsLoading(true);
     const textContent = getMessageTextContent(userMessage);
     const images = getMessageImages(userMessage);
-    chatStore.onUserInput(textContent, images).then(() => setIsLoading(false));
+    chatStore
+      .onUserInput(textContent, images, attachFiles)
+      .then(() => setIsLoading(false));
     inputRef.current?.focus();
   };
 
@@ -1551,6 +1570,54 @@ function _Chat() {
     },
     [attachImages, chatStore],
   );
+
+  async function uploadDocument() {
+    const files: UploadFile[] = [];
+    files.push(...attachFiles);
+
+    files.push(
+      ...(await new Promise<UploadFile[]>((res, rej) => {
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "text/*";
+        fileInput.multiple = true;
+        fileInput.onchange = (event: any) => {
+          setUploading(true);
+          const inputFiles = event.target.files;
+          const imagesData: UploadFile[] = [];
+          (async () => {
+            for (let i = 0; i < inputFiles.length; i++) {
+              const file = inputFiles[i];
+              try {
+                const dataUrl = await uploadFileRemote(file);
+                const fileData: UploadFile = { name: file.name, url: dataUrl };
+                const tokenCount: number = await countTokens(fileData);
+                fileData.tokenCount = tokenCount;
+                imagesData.push(fileData);
+                if (
+                  imagesData.length === 3 ||
+                  imagesData.length === inputFiles.length
+                ) {
+                  setUploading(false);
+                  res(imagesData);
+                }
+              } catch (e) {
+                setUploading(false);
+                rej(e);
+              }
+            }
+          })();
+        };
+        fileInput.click();
+      })),
+    );
+
+    const filesLength = files.length;
+    if (filesLength > 3) {
+      files.splice(3, filesLength - 3);
+    }
+    setAttachFiles(files);
+  }
 
   async function uploadImage() {
     const images: string[] = [];
@@ -2020,7 +2087,42 @@ function _Chat() {
                                 )}
                               </div>
                             )}
-                          </div>
+                            {getMessageFiles(message).length > 0 && (
+                      <div className={styles["chat-message-item-files"]}>
+                        {getMessageFiles(message).map((file, index) => {
+                          const extension: DefaultExtensionType = file.name
+                            .split(".")
+                            .pop()
+                            ?.toLowerCase() as DefaultExtensionType;
+                          const style = defaultStyles[extension];
+                          return (
+                            <a
+                              href={file.url}
+                              target="_blank"
+                              key={index}
+                              className={styles["chat-message-item-file"]}
+                            >
+                              <div
+                                className={
+                                  styles["chat-message-item-file-icon"] +
+                                  " no-dark"
+                                }
+                              >
+                                <FileIcon {...style} glyphColor="#303030" />
+                              </div>
+                              <div
+                                className={
+                                  styles["chat-message-item-file-name"]
+                                }
+                              >
+                                {file.name} {file.tokenCount}K
+                              </div>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                           {message?.audio_url && (
                             <div className={styles["chat-message-audio"]}>
                               <audio src={message.audio_url} controls />
@@ -2046,9 +2148,11 @@ function _Chat() {
               />
 
               <ChatActions
-                uploadImage={uploadImage}
+                uploadDocument={uploadDocument}
+          uploadImage={uploadImage}
                 setAttachImages={setAttachImages}
-                setUploading={setUploading}
+                setAttachFiles={setAttachFiles}
+          setUploading={setUploading}
                 showPromptModal={() => setShowPromptModal(true)}
                 scrollToBottom={scrollToBottom}
                 hitBottom={hitBottom}
@@ -2071,7 +2175,7 @@ function _Chat() {
               <label
                 className={clsx(styles["chat-input-panel-inner"], {
                   [styles["chat-input-panel-inner-attach"]]:
-                    attachImages.length !== 0,
+                    attachImages.length !== 0 || attachFiles.length != 0,
                 })}
                 htmlFor="chat-input"
               >
