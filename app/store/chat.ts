@@ -395,7 +395,7 @@ export const useChatStore = createPersistStore(
 
       onNewMessage(message: ChatMessage, targetSession: ChatSession) {
         get().updateTargetSession(targetSession, (session) => {
-          session.messages = [...session.messages];
+          session.messages = session.messages.concat();
           session.lastUpdate = Date.now();
         });
 
@@ -422,6 +422,7 @@ export const useChatStore = createPersistStore(
         let mContent: string | MultimodalContent[] = isMcpResponse
           ? content
           : fillTemplateWith(content, modelConfig);
+        const userContent = content;
         let displayContent: string | MultimodalContent[] = userContent;
         displayContent = [
           {
@@ -455,6 +456,7 @@ export const useChatStore = createPersistStore(
             }),
           );
 
+        }
         if (!isMcpResponse && attachImages && attachImages.length > 0) {
           mContent = [
             ...(content ? [{ type: "text" as const, text: content }] : []),
@@ -506,7 +508,7 @@ export const useChatStore = createPersistStore(
               botMessage.content = message;
             }
             get().updateTargetSession(session, (session) => {
-              session.messages = [...session.messages];
+              session.messages = session.messages.concat();
             });
           },
           async onFinish(message) {
@@ -521,7 +523,7 @@ export const useChatStore = createPersistStore(
           onBeforeTool(tool: ChatMessageTool) {
             (botMessage.tools = botMessage?.tools || []).push(tool);
             get().updateTargetSession(session, (session) => {
-              session.messages = [...session.messages];
+              session.messages = session.messages.concat();
             });
           },
           onAfterTool(tool: ChatMessageTool) {
@@ -531,7 +533,7 @@ export const useChatStore = createPersistStore(
               }
             });
             get().updateTargetSession(session, (session) => {
-              session.messages = [...session.messages];
+              session.messages = session.messages.concat();
             });
           },
           onError(error) {
@@ -546,7 +548,7 @@ export const useChatStore = createPersistStore(
             userMessage.isError = !isAborted;
             botMessage.isError = !isAborted;
             get().updateTargetSession(session, (session) => {
-              session.messages = [...session.messages];
+              session.messages = session.messages.concat();
             });
             ChatControllerPool.remove(
               session.id,
