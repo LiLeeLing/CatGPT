@@ -2149,7 +2149,7 @@ function _Chat() {
 
               <ChatActions
                 uploadDocument={uploadDocument}
-          uploadImage={uploadImage}
+                uploadImage={uploadImage}
                 setAttachImages={setAttachImages}
                 setAttachFiles={setAttachFiles}
           setUploading={setUploading}
