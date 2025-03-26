@@ -21,6 +21,8 @@
     "test:ci": "node --no-warnings --experimental-vm-modules $(yarn bin jest) --ci"
   },
   "dependencies": {
+    "bufferutil": "^4.0.9",
+    "utf-8-validate":"^6.0.5",
     "@fortaine/fetch-event-source": "^3.0.6",
     "@hello-pangea/dnd": "^16.5.0",
     "@modelcontextprotocol/sdk": "^1.0.4",
@@ -61,6 +63,8 @@
     "zustand": "^4.3.8"
   },
   "devDependencies": {
+    "bufferutil": "^4.0.9",
+    "utf-8-validate":"^6.0.5",
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/cli": "1.5.11",
     "@testing-library/dom": "^10.4.0",
