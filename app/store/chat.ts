@@ -30,7 +30,7 @@ import {
   SUMMARIZE_MODEL,
 } from "../constant";
 import Locale, { getLang } from "../locales";
-import { isDalle3, safeLocalStorage, readFileContent } from "../utils";
+import { readFileContent } from "../utils";
 import { prettyObject } from "../utils/format";
 import { createPersistStore } from "../utils/store";
 import { estimateTokenLength } from "../utils/token";
@@ -395,7 +395,7 @@ export const useChatStore = createPersistStore(
 
       onNewMessage(message: ChatMessage, targetSession: ChatSession) {
         get().updateTargetSession(targetSession, (session) => {
-          session.messages = session.messages.concat();
+          session.messages = [...session.messages];
           session.lastUpdate = Date.now();
         });
 
@@ -506,7 +506,7 @@ export const useChatStore = createPersistStore(
               botMessage.content = message;
             }
             get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
+              session.messages = [...session.messages];
             });
           },
           async onFinish(message) {
@@ -521,7 +521,7 @@ export const useChatStore = createPersistStore(
           onBeforeTool(tool: ChatMessageTool) {
             (botMessage.tools = botMessage?.tools || []).push(tool);
             get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
+              session.messages = [...session.messages];
             });
           },
           onAfterTool(tool: ChatMessageTool) {
@@ -531,7 +531,7 @@ export const useChatStore = createPersistStore(
               }
             });
             get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
+              session.messages = [...session.messages];
             });
           },
           onError(error) {
@@ -546,7 +546,7 @@ export const useChatStore = createPersistStore(
             userMessage.isError = !isAborted;
             botMessage.isError = !isAborted;
             get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
+              session.messages = [...session.messages];
             });
             ChatControllerPool.remove(
               session.id,
