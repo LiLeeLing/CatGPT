@@ -412,7 +412,6 @@ export const useChatStore = createPersistStore(
 
         attachImages?: string[],
         isMcpResponse?: boolean,
-      ,
         attachFiles?: UploadFile[],
       ) {
         const session = get().currentSession();
