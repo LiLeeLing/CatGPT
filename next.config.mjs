@@ -20,8 +20,12 @@ const nextConfig = {
       );
     }
 
+    // 修改 resolve.fallback 部分
     config.resolve.fallback = {
+      ...config.resolve.fallback, // 保留可能存在的其他 fallback 设置
       child_process: false,
+      bufferutil: false,         // <--- 添加
+      "utf-8-validate": false,   // <--- 添加
     };
 
     return config;
@@ -109,3 +113,4 @@ if (mode !== "export") {
 }
 
 export default nextConfig;
+
