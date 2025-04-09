@@ -77,7 +77,7 @@ const DEFAULT_ACCESS_STATE = {
   // google ai studio
   googleUrl: DEFAULT_GOOGLE_URL,
   googleApiKey: "",
-  googleApiVersion: "v1",
+  googleApiVersion: "v1beta",
   googleSafetySettings: GoogleSafetySettingsThreshold.BLOCK_NONE,
 
   // anthropic
