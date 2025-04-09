@@ -1,4 +1,4 @@
-import { TTSConfig, TTSConfigValidator, TTSEdgeVoiceType } from "../store"; 
+import { TTSConfig, TTSConfigValidator } from "../store";
 
 import Locale from "../locales";
 import { ListItem, Select } from "./ui-lib";

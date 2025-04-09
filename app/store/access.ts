@@ -292,7 +292,7 @@ export const useAccessStore = createPersistStore(
       if (version < 2.1) {
         // 假设 persistedState 是旧的状态对象
         if (persistedState && persistedState.hasOwnProperty('edgeTTSVoiceName')) {
-          delete persistedState.edgeTTSVoiceName;
+          delete (persistedState as any).edgeTTSVoiceName; 
         }
       }
       return persistedState as any;
