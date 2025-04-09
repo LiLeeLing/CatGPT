@@ -455,6 +455,19 @@ export const DEFAULT_TTS_VOICES = [
   "shimmer",
 ];
 
+// 新增: Edge-TTS 默认声音和列表
+export const DEFAULT_EDGE_TTS_VOICE = "zh-CN-XiaoxiaoNeural"; // 选一个常见的作为默认值
+export const DEFAULT_EDGE_TTS_VOICES = [ // 添加一些示例声音，可以根据需要扩展
+  "zh-CN-XiaoxiaoNeural", // 晓晓
+  "zh-CN-YunxiNeural",    // 云希
+  "zh-CN-YunjianNeural",  // 云健
+  "zh-CN-XiaoyiNeural",   // 晓伊
+  "zh-CN-YunyangNeural",  // 云扬
+  "en-US-JennyNeural",    // 英语示例
+  "en-US-AriaNeural",     // 英语示例
+  // 更多声音可以在 Edge TTS 文档中查找: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts
+];
+
 export const VISION_MODEL_REGEXES = [
   /vision/,
   /gpt-4o/,

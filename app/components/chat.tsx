@@ -1301,7 +1301,9 @@ function _Chat() {
       const { markdownToTxt } = require("markdown-to-txt");
       const textContent = markdownToTxt(text);
       if (config.ttsConfig.engine !== DEFAULT_TTS_ENGINE) {
-        const edgeVoiceName = accessStore.edgeVoiceName();
+        //const edgeVoiceName = accessStore.edgeVoiceName();
+        const config = useAppConfig.getState(); // 确保获取到最新的 config
+        const edgeVoiceName = config.ttsConfig.edgeTTSVoiceName;
         const tts = new MsEdgeTTS();
         await tts.setMetadata(
           edgeVoiceName,
