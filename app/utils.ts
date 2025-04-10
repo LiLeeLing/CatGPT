@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { showToast } from "./components/ui-lib";
 import Locale from "./locales";
-import { RequestMessage } from "./client/api";
+import { RequestMessage, UploadFile } from "./client/api";
 import {
   REQUEST_TIMEOUT_MS,
   REQUEST_TIMEOUT_MS_FOR_THINKING,
@@ -24,6 +24,65 @@ export function trimTopic(topic: string) {
       .replace(/[，。！？”“"、,.!?*]*$/, "")
   );
 }
+
+export const readFileContent = async (file: UploadFile): Promise<string> => {
+  const host_url = new URL(window.location.href);
+  const file_url = new URL(file.url);
+  if (file_url.host !== host_url.host) {
+    throw new Error(`The URL ${file.url} is not allowed to access.`);
+  }
+  try {
+    const response = await fetch(file.url);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch content from ${file.url}: ${response.statusText}`,
+      );
+    }
+    //const content = await response.text();
+    //const result = file.name + "\n" + content;
+    //return result;
+    return await response.text();
+  } catch (error) {
+    console.error("Error reading file content:", error);
+    throw error;
+  }
+};
+
+/**
+ * Estimates the token count of a text file using character-based weights.
+ * Note: This is a rough estimation as standard tokenizers cannot be used due to environment constraints.
+ * @param file - The file to analyze
+ * @returns Estimated token count in thousands (K)
+ */
+export const countTokens = async (file: UploadFile) => {
+  const text = await readFileContent(file);
+  let totalTokens = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === " " && nextChar === " ") {
+      totalTokens += 0.081;
+    } else if ("NORabcdefghilnopqrstuvy ".includes(char)) {
+      totalTokens += 0.202;
+    } else if ("CHLMPQSTUVfkmspwx".includes(char)) {
+      totalTokens += 0.237;
+    } else if ("-.ABDEFGIKWY_\\r\\tz{ü".includes(char)) {
+      totalTokens += 0.304;
+    } else if ("!{{input}}(/;=JX`j\\n}ö".includes(char)) {
+      totalTokens += 0.416;
+    } else if ('"#%)*+56789<>?@Z[\\]^|§«äç’'.includes(char)) {
+      totalTokens += 0.479;
+    } else if (",01234:~Üß".includes(char) || char.charCodeAt(0) > 255) {
+      totalTokens += 0.658;
+    } else {
+      totalTokens += 0.98;
+    }
+  }
+  const totalTokenCount: number = +(totalTokens / 1000).toFixed(2);
+  return totalTokenCount;
+};
 
 export async function copyToClipboard(text: string) {
   try {
@@ -278,6 +337,19 @@ export function getMessageImages(message: RequestMessage): string[] {
     }
   }
   return urls;
+}
+
+export function getMessageFiles(message: RequestMessage): UploadFile[] {
+  if (typeof message.content === "string") {
+    return [];
+  }
+  const files: UploadFile[] = [];
+  for (const c of message.content) {
+    if (c.type === "file_url" && c.file_url) {
+      files.push(c.file_url);
+    }
+  }
+  return files;
 }
 
 export function isVisionModel(model: string) {

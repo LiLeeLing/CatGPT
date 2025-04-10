@@ -21,11 +21,14 @@
     "test:ci": "node --no-warnings --experimental-vm-modules $(yarn bin jest) --ci"
   },
   "dependencies": {
+    "bufferutil": "^4.0.9",
+    "utf-8-validate":"^6.0.5",
     "@fortaine/fetch-event-source": "^3.0.6",
     "@hello-pangea/dnd": "^16.5.0",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@next/third-parties": "^14.1.0",
     "@svgr/webpack": "^6.5.1",
+    "@types/react-file-icon": "^1.0.4",
     "@vercel/analytics": "^0.1.11",
     "@vercel/speed-insights": "^1.0.2",
     "axios": "^1.7.5",
@@ -44,6 +47,7 @@
     "openapi-client-axios": "^7.5.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-file-icon": "^1.5.0",
     "react-markdown": "^8.0.7",
     "react-router-dom": "^6.15.0",
     "rehype-highlight": "^6.0.0",
@@ -59,6 +63,8 @@
     "zustand": "^4.3.8"
   },
   "devDependencies": {
+    "bufferutil": "^4.0.9",
+    "utf-8-validate":"^6.0.5",
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/cli": "1.5.11",
     "@testing-library/dom": "^10.4.0",
