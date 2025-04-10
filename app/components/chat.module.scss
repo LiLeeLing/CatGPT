@@ -1,34 +1,33 @@
 @import "../styles/animation.scss";
 
-// --- 新增或修改的部分 开始 ---
-
-// 总的附件容器，用于绝对定位
+// --- 附件预览区 (位于输入框下方) ---
 .attachments {
-  position: absolute;
-  left: 30px; // 与 bak 文件一致
-  bottom: 32px; // 与 bak 文件一致
-  display: flex; // 让图片和文件区域水平排列
-  align-items: flex-start; // 顶部对齐，因为文件列表可能比图片矮
-  max-height: 64px; // 限制整体高度，与图片高度一致
-  overflow: hidden; // 隐藏溢出的部分（如果文件过多）
+  display: flex;         // 图片区和文件区水平排列
+  align-items: flex-start; // 顶部对齐
+  margin-top: 10px;    // 与上方输入框区域的间距
+  width: 100%;         // 占据父容器宽度
+  box-sizing: border-box;
+  flex-wrap: wrap;     // 如果内容太宽，允许换行
+  gap: 10px;           // 图片区和文件区之间的间距
+  max-height: 150px;   // 限制最大高度
+  overflow-y: auto;    // 超出高度时允许垂直滚动
+  // padding: 5px 0;   // 可选内边距
 }
 
-// 图片预览容器 (基本保持 bak 样式，移除绝对定位)
+// 图片预览容器
 .attach-images {
-  display: flex; // 水平排列图片
-  // position: absolute; // 移除
-  // left: 30px; // 移除
-  // bottom: 32px; // 移除
+  display: flex;
+  flex-wrap: wrap; // 图片多时允许换行
+  gap: 10px;       // 图片之间的间距
 }
 
-// 单个图片预览 (与 bak 文件一致)
+// 单个图片预览
 .attach-image {
   cursor: default;
   width: 64px;
   height: 64px;
   border: rgba($color: #888, $alpha: 0.2) 1px solid;
   border-radius: 5px;
-  margin-right: 10px; // 图片之间的间距
   background-size: cover;
   background-position: center;
   background-color: var(--white);
@@ -53,14 +52,13 @@
   }
 
   .delete-image {
-    width: 20px;  // 稍微调整大小
-    height: 20px; // 稍微调整大小
+    width: 20px;
+    height: 20px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 3px; // 稍微调整圆角
-    // float: right; // 使用 flex 布局，不再需要 float
+    border-radius: 3px;
     background-color: rgba(255, 255, 255, 0.8); // 半透明背景
     margin: 3px; // 距离边缘一点距离
     color: var(--danger-color, red); // 可选：给删除图标加颜色
@@ -72,11 +70,10 @@
 .attach-files {
   display: flex;
   flex-direction: column; // 文件垂直排列
-  margin-left: 10px; // 与图片区域隔开
-  max-height: 64px; // 限制高度与图片一致
-  overflow-y: auto;  // 如果文件过多，允许滚动
-  justify-content: flex-start; // 从顶部开始排列
+  justify-content: flex-start;
   gap: 4px; // 文件之间的垂直间距
+  flex: 1; // 尝试让文件列表填充剩余空间
+  min-width: 150px; // 保证一个最小宽度
 }
 
 // 单个文件预览项
@@ -85,14 +82,13 @@
   display: flex;
   flex-direction: row; // 图标、名称、Token 水平排列
   align-items: center; // 垂直居中对齐
-  // column-gap: 4px; // 使用 margin 代替，更灵活
   color: var(--black);
   font-size: 12px; // 稍微减小字体以便容纳更多信息
   border-radius: 4px; // 添加圆角
   padding: 2px 5px; // 添加一点内边距
   background-color: rgba(0, 0, 0, 0.05); // 轻微背景色
   border: 1px solid rgba(0, 0, 0, 0.1); // 轻微边框
-  position: relative; // 为了删除按钮的定位或悬停效果
+  position: relative;
   white-space: nowrap; // 防止内部元素换行
 
   .attach-file-icon {
@@ -100,11 +96,10 @@
     max-width: 16px;
     height: 16px; // 明确高度
     margin-right: 4px; // 图标和名称间距
-    display: flex; // 确保图标居中（如果需要）
-    align-items: center; // 确保图标居中（如果需要）
+    display: flex;
+    align-items: center;
   }
 
-  // 文件名
   .attach-file-name {
     flex-shrink: 1; // 允许文件名收缩
     overflow: hidden;
@@ -114,7 +109,6 @@
     margin-right: 8px; // 名称和 Token 间距
   }
 
-  // Token 统计
   .attach-file-tokens {
     font-size: 10px; // Token 字体更小
     color: var(--second-text-color, #888); // Token 颜色浅一点
@@ -122,7 +116,6 @@
     flex-shrink: 0; // 不允许收缩
   }
 
-  // 删除按钮 (放在最右侧)
   .delete-file {
     width: 16px;
     height: 16px;
@@ -131,7 +124,6 @@
     align-items: center;
     justify-content: center;
     border-radius: 3px;
-    // background-color: var(--white); // 可选背景色
     color: var(--second-text-color, #888); // 删除图标颜色
     margin-left: auto; // 将其推到最右边
     opacity: 0.5; // 默认半透明
@@ -142,17 +134,9 @@
       color: var(--danger-color, red); // 悬停时变红
     }
   }
-
-  // 移除旧的/复杂的名称限制和 hover 效果相关样式
-  // .attach-file-name-full, .attach-file-name-half, etc. - 移除
-  // .attach-image-mask, .delete-image - 调整或用 .delete-file 代替
 }
 
-// --- 新增或修改的部分 结束 ---
-
-
-// --- 以下大部分是 bak 文件的内容，确保一致性 ---
-
+// --- 输入区域上方按钮 ---
 .chat-input-actions {
   display: flex;
   flex-wrap: wrap;
@@ -180,7 +164,6 @@
     height: 16px;
     width: var(--icon-width);
     overflow: hidden;
-    // 移除 &:not(:last-child) { margin-right: 5px; } 因为使用了 gap
 
     .text {
       white-space: nowrap;
@@ -212,7 +195,8 @@
   }
 }
 
-.prompt-toast { // 与 bak 一致
+// --- 其他 UI 元素 (参照 bak 文件) ---
+.prompt-toast {
   position: absolute;
   bottom: -50px;
   z-index: 999;
@@ -241,7 +225,7 @@
   }
 }
 
-.section-title { // 与 bak 一致
+.section-title {
   font-size: 12px;
   font-weight: bold;
   margin-bottom: 10px;
@@ -255,7 +239,7 @@
   }
 }
 
-.context-prompt { // 与 bak 一致
+.context-prompt {
   .context-prompt-insert {
     display: flex;
     justify-content: center;
@@ -312,7 +296,7 @@
   }
 }
 
-.memory-prompt { // 与 bak 一致
+.memory-prompt {
   margin: 20px 0;
 
   .memory-prompt-content {
@@ -326,7 +310,7 @@
   }
 }
 
-.clear-context { // 与 bak 一致
+.clear-context {
   margin: 20px 0 0 0;
   padding: 4px 0;
 
@@ -393,24 +377,25 @@
   }
 }
 
-.chat { // 与 bak 一致
+// --- 聊天区域整体布局 ---
+.chat {
   display: flex;
   flex-direction: column;
   position: relative;
   height: 100%;
 }
 
-.chat-body { // 与 bak 一致
+.chat-body {
   flex: 1;
   overflow: auto;
   overflow-x: hidden;
   padding: 20px;
-  padding-bottom: 40px;
+  padding-bottom: 40px; // 为输入区留出一些视觉空间
   position: relative;
   overscroll-behavior: none;
 }
 
-.chat-body-main-title { // 与 bak 一致
+.chat-body-main-title {
   cursor: pointer;
 
   &:hover {
@@ -418,13 +403,14 @@
   }
 }
 
-@media only screen and (max-width: 600px) { // 与 bak 一致
+@media only screen and (max-width: 600px) {
   .chat-body-title {
     text-align: center;
   }
 }
 
-.chat-message { // 与 bak 一致
+// --- 聊天消息样式 ---
+.chat-message {
   display: flex;
   flex-direction: row;
 
@@ -433,7 +419,7 @@
   }
 }
 
-.chat-message-user { // 与 bak 一致
+.chat-message-user {
   display: flex;
   flex-direction: row-reverse;
 
@@ -442,12 +428,12 @@
   }
 }
 
-.chat-message-header { // 与 bak 一致
+.chat-message-header {
   margin-top: 20px;
   display: flex;
   align-items: center;
 
-  .chat-message-actions {
+  .chat-message-actions { // 消息悬停操作
     display: flex;
     box-sizing: border-box;
     font-size: 12px;
@@ -459,7 +445,7 @@
     opacity: 0;
     pointer-events: none;
 
-    .chat-input-actions { // 注意：这里可能需要检查是否与顶部的 .chat-input-actions 冲突或需要合并
+    .chat-input-actions { // 消息操作里的按钮（如果复用样式）
       display: flex;
       flex-wrap: nowrap;
     }
@@ -472,18 +458,18 @@
   }
 }
 
-.chat-message-container { // 与 bak 一致
+.chat-message-container {
   max-width: var(--message-max-width);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 
   &:hover {
-    .chat-message-edit {
+    .chat-message-edit { // 编辑按钮（如果需要）
       opacity: 0.9;
     }
 
-    .chat-message-actions {
+    .chat-message-actions { // 显示消息操作
       opacity: 1;
       pointer-events: all;
       transform: scale(1) translateY(0);
@@ -491,11 +477,11 @@
   }
 }
 
-.chat-message-user > .chat-message-container { // 与 bak 一致
+.chat-message-user > .chat-message-container {
   align-items: flex-end;
 }
 
-.chat-message-avatar { // 与 bak 一致
+.chat-message-avatar {
   position: relative;
 
   .chat-message-edit {
@@ -524,14 +510,14 @@
   }
 }
 
-.chat-message-status { // 与 bak 一致
+.chat-message-status {
   font-size: 12px;
   color: #aaa;
   line-height: 1.5;
   margin-top: 5px;
 }
 
-.chat-message-tools { // 与 bak 一致
+.chat-message-tools {
   font-size: 12px;
   color: #aaa;
   line-height: 1.5;
@@ -546,7 +532,7 @@
   }
 }
 
-.chat-message-item { // 与 bak 一致
+.chat-message-item {
   box-sizing: border-box;
   max-width: 100%;
   margin-top: 10px;
@@ -561,8 +547,8 @@
   transition: all ease 0.3s;
 }
 
-// --- 消息中的图片/文件样式 (从现有 current scss 合并和调整) ---
-.chat-message-item-image { // 与 bak 一致
+// 消息中的图片/文件样式
+.chat-message-item-image {
   width: 100%;
   margin-top: 10px;
   box-sizing: border-box;
@@ -570,7 +556,7 @@
   border: rgba($color: #888, $alpha: 0.2) 1px solid;
 }
 
-.chat-message-item-images { // 与 bak 一致
+.chat-message-item-images {
   width: 100%;
   display: grid;
   justify-content: left;
@@ -579,7 +565,7 @@
   margin-top: 10px;
 }
 
-.chat-message-item-image-multi { // 与 bak 一致
+.chat-message-item-image-multi {
   object-fit: cover;
   background-size: cover;
   background-position: center;
@@ -589,38 +575,34 @@
   border: rgba($color: #888, $alpha: 0.2) 1px solid;
 }
 
-// 消息中的文件列表样式 (从现有 current scss 合并)
-.chat-message-item-files {
+.chat-message-item-files { // 消息中文件列表
   width: 100%;
   display: flex;
   flex-direction: column;
-  row-gap: 6px; // 调整间距
-  // flex-wrap: wrap; // 通常不需要换行，因为是垂直列表
+  row-gap: 6px;
   margin-top: 10px;
 }
 
-.chat-message-item-file {
+.chat-message-item-file { // 消息中单个文件
   display: flex;
   flex-direction: row;
-  align-items: center; // 垂直居中
+  align-items: center;
   column-gap: 6px;
 }
 .chat-message-item-file-icon {
   max-width: 16px;
-  height: 16px; // 确保高度
-  flex-shrink: 0; // 防止图标被压缩
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .chat-message-item-file-name {
   max-width:100%;
-  overflow: hidden; // 添加溢出处理
-  text-overflow: ellipsis; // 添加溢出处理
-  white-space: nowrap; // 添加溢出处理
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-// --- 消息中的图片/文件样式 结束 ---
 
-
-// --- 媒体查询部分 (与 bak 一致) ---
+// 消息中图片/文件的媒体查询
 @media only screen and (max-width: 600px) {
   $calc-image-width: calc(100vw / 3 * 2 / var(--image-count));
 
@@ -654,9 +636,8 @@
     max-width: calc(calc(1200px - var(--sidebar-width)) / 3 * 2);
   }
 }
-// --- 媒体查询部分 结束 ---
 
-.chat-message-action-date { // 与 bak 一致
+.chat-message-action-date { // 消息时间戳
   font-size: 12px;
   opacity: 0.2;
   white-space: nowrap;
@@ -670,53 +651,56 @@
   z-index: 1;
 }
 
-.chat-message-user > .chat-message-container > .chat-message-item { // 与 bak 一致
+.chat-message-user > .chat-message-container > .chat-message-item { // 用户自己发的消息样式
   background-color: var(--second);
 
   &:hover {
-    min-width: 0;
+    min-width: 0; // 覆盖可能的基础样式
   }
 }
 
-.chat-input-panel { // 与 bak 一致
-  position: relative;
+// --- 输入面板整体 ---
+.chat-input-panel {
+  position: relative; // 保持相对定位
   width: 100%;
-  padding: 20px;
-  padding-top: 10px;
+  padding: 20px;      // 外边距
+  padding-top: 10px;  // 顶部按钮区域的padding
   box-sizing: border-box;
-  // flex-direction: column; // 移除，让内部元素自然排列或由 flex 控制
+  display: flex;        // Flexbox 布局
+  flex-direction: column; // 子元素垂直排列: 按钮 -> 输入框 -> 附件
   border-top: var(--border-in-light);
   box-shadow: var(--card-shadow);
-  display: flex; // 使用 flex 布局
-  flex-direction: column; // 确保 actions 在 panel-inner 上方
+  background-color: var(--input-panel-bg, var(--white)); // 输入面板背景色
 
-  .chat-input-actions { // 确保按钮在输入框上方
-    margin-bottom: 10px; // 与输入框区域的间距
-    // .chat-input-action { // 移除，已在 .chat-input-actions 中定义间距
-    //   margin-bottom: 10px;
-    // }
+  .chat-input-actions { // 确保按钮组样式应用
+    margin-bottom: 10px; // 按钮和输入框之间的间距
   }
 }
 
-@mixin single-line { // 与 bak 一致
+@mixin single-line {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.prompt-hints { // 与 bak 一致
+// --- 输入提示 ---
+.prompt-hints {
   min-height: 20px;
   width: 100%;
   max-height: 50vh;
   overflow: auto;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column-reverse; // 从下往上显示
 
   background-color: var(--white);
   border: var(--border-in-light);
   border-radius: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 10px; // 与输入框的间距（如果放在输入框上方）
   box-shadow: var(--shadow);
+  position: absolute; // 通常绝对定位在输入框上方
+  bottom: 100%; // 定位在父元素上方
+  left: 0;
+  z-index: 10; // 确保在其他元素之上
 
   .prompt-hint {
     color: var(--black);
@@ -735,13 +719,11 @@
     .hint-title {
       font-size: 12px;
       font-weight: bolder;
-
       @include single-line();
     }
 
     .hint-content {
       font-size: 12px;
-
       @include single-line();
     }
 
@@ -752,87 +734,80 @@
   }
 }
 
-.chat-input-panel-inner { // 与 bak 一致
+// --- 输入框容器 ---
+.chat-input-panel-inner {
   cursor: text;
-  display: flex; // 使用 flex
-  flex: 1;       // 占据剩余空间
+  display: flex; // 允许内部元素布局
+  flex: 1;       // 占据父容器分配的空间
   border-radius: 10px;
   border: var(--border-in-light);
-  position: relative; // 添加相对定位，以便绝对定位的附件和发送按钮相对于它
-  background-color: var(--white); // 确保背景色，覆盖可能的父元素背景
+  position: relative; // !!! 重要：作为发送按钮的定位基准
+  background-color: var(--white); // 输入框区域背景色
+
+  &:has(.chat-input:focus) {
+    border: 1px solid var(--primary);
+  }
 }
 
-// 这个类用于在有附件时增加底部内边距，确保输入框文本不被附件遮挡
-.chat-input-panel-inner-attach {
-  // 注意：绝对定位的附件理论上不影响内边距，但如果希望文本区域视觉上避开附件，可以调整输入框的 padding
-  // padding-bottom: 80px; // 这个可能需要应用在 .chat-input 上，或者调整 .attachments 的 bottom 值
-}
-
-.chat-input-panel-inner:has(.chat-input:focus) { // 与 bak 一致
-  border: 1px solid var(--primary);
-}
-
-.chat-input { // 与 bak 一致，但 padding 可能需要微调
+// --- 文本输入框 ---
+.chat-input {
   height: 100%;
   width: 100%;
-  border-radius: 10px; // 可能需要移除，让父元素 panel-inner 控制圆角
+  border-radius: 10px; // 可选，父元素已有圆角
   border: none;
-  // box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.03); // 阴影放在 panel-inner 上更好
-  background-color: transparent; // 让 panel-inner 的背景色生效
+  background-color: transparent; // 使用父元素的背景
   color: var(--black);
   font-family: inherit;
   // 调整 padding: top right bottom left
-  // bottom 需要足够空间给附件（即使它们是绝对定位），left 也需要空间
-  padding: 10px 90px 10px 14px; // 保持 bak 的值，后续根据附件实际占用调整
-  // 如果附件区高度固定(如64px)，并且绝对定位在 bottom: 32px，输入框的 padding-bottom 可能不需要太大调整
-  // 但 padding-left 可能需要增加，取决于附件区的总宽度
-  // 例如: padding: 10px 90px 10px calc(30px + total_attachment_width + 10px);
-  // 需要动态计算或估算 total_attachment_width
-  // 暂时保持原样，如果重叠再调整
+  padding: 10px 50px 10px 14px; // 右侧给发送按钮留空间
   resize: none;
   outline: none;
   box-sizing: border-box;
   min-height: 68px; // 保持 bak 的值
+  font-size: 14px; // 默认字体大小
 }
 
-.chat-input:focus { // 与 bak 一致
+.chat-input:focus {
   // 无特殊样式
 }
 
-.chat-input-send { // 与 bak 一致
+// --- 发送按钮 ---
+.chat-input-send {
   background-color: var(--primary);
   color: white;
-
-  position: absolute;
-  right: 30px;
-  bottom: 32px;
-  // 确保它是一个按钮的大小，例如:
-  width: 32px;
-  height: 32px;
+  position: absolute; // 相对于 .chat-input-panel-inner 定位
+  right: 10px;    // 距离右边框
+  bottom: 10px;   // 距离底边框
+  width: 32px;    // 按钮大小
+  height: 32px;   // 按钮大小
   border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
   cursor: pointer;
+  z-index: 1; // 确保在可能的文本之上
 }
 
-@media only screen and (max-width: 600px) { // 与 bak 一致
+// --- 输入区域移动端适配 ---
+@media only screen and (max-width: 600px) {
   .chat-input {
-    font-size: 16px;
+    font-size: 16px;       // 移动端字体稍大
+    padding-right: 45px; // 调整发送按钮空间
   }
 
   .chat-input-send {
-    bottom: 30px; // 保持 bak 的值
-    right: 20px; // 移动端可能右边距小点
+    right: 8px;    // 调整移动端发送按钮位置
+    bottom: 8px;   // 调整移动端发送按钮位置
   }
 
-  .attachments { // 移动端调整附件位置
-    left: 15px;
-    bottom: 30px;
+  .attachments {
+     margin-top: 8px; // 调整移动端间距
+     max-height: 120px; // 移动端预览区最大高度小一点
   }
 
-  .attach-file { // 移动端文件预览字体小点
+   // 移动端文件预览样式调整
+  .attach-file {
      font-size: 11px;
      .attach-file-tokens {
         font-size: 9px;
@@ -843,7 +818,7 @@
   }
 }
 
-// --- 快捷键和其他部分 (与 bak 一致) ---
+// --- 快捷键提示 (参照 bak 文件) ---
 .shortcut-key-container {
   padding: 10px;
   overflow-y: auto;
@@ -892,19 +867,23 @@
   color: var(--black);
 }
 
+// --- 聊天主界面和侧边栏 (参照 bak 文件) ---
 .chat-main {
   display: flex;
   height: 100%;
   width: 100%;
   position: relative;
   overflow: hidden;
+
   .chat-body-container {
     height: 100%;
     display: flex;
     flex-direction: column;
     flex: 1;
     width: 100%;
+    background-color: var(--chat-bg, #f7f7f7); // 聊天背景色
   }
+
   .chat-side-panel {
     position: absolute;
     inset: 0;
