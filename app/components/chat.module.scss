@@ -8,6 +8,13 @@
   flex-direction: row;
 }*/
 
+.attach-images,
+.attach-files {
+  width: 100%; // 强制占满一行
+  order: -1;
+}
+
+
 .attach-images {
   //position: absolute;
   //left: 30px;
@@ -801,9 +808,11 @@
   cursor: text;
   display: flex;
   flex: 1;
-  flex-direction: column; // 让输入框和预览区垂直排列
+  //flex-direction: column; // 让输入框和预览区垂直排列
   border-radius: 10px;
   border: var(--border-in-light);
+  align-items: flex-end; // 或者 center, stretch 等，根据需要调整
+  position: relative; // 确保内部绝对定位的元素（如发送按钮）有参考
 }
 
 .chat-input-panel-inner-attach {
@@ -826,8 +835,8 @@
   padding: 10px 90px 10px 14px;
   resize: none;
   outline: none;
-  box-sizing: border-box;
-  min-height: 68px;
+  flex-grow: 1; // 让输入框占据剩余空间
+  min-height: 68px; // 保持最小高度
 }
 
 .chat-input:focus {
@@ -840,6 +849,10 @@
   position: absolute;
   right: 30px;
   bottom: 32px;
+
+  margin-left: 10px; // 与输入区分隔
+   flex-shrink: 0; // 防止按钮被压缩
+
 }
 
 @media only screen and (max-width: 600px) {
