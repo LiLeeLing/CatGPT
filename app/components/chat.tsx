@@ -1284,7 +1284,7 @@ function _Chat() {
     const textContent = getMessageTextContent(userMessage);
     const images = getMessageImages(userMessage);
     chatStore
-      .onUserInput(textContent, images, attachFiles)
+      .onUserInput(textContent, images, undefined, attachFiles)
       .then(() => setIsLoading(false));
     inputRef.current?.focus();
   };
