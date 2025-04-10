@@ -3,9 +3,8 @@
 // --- 附件预览区 (位于输入框内部下方) ---
 .attachments {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: flex-start;
-  gap: 4px;              // (修改) 统一且减小间距
   width: 100%;
   box-sizing: border-box;
   padding: 8px 14px 5px 14px;
@@ -14,12 +13,12 @@
   overflow-x: hidden;
 }
 
-// 图片预览容器 (附件区上方)
+// 图片预览容器 (附件区左侧)
 .attach-images {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;        // (修改) 统一且减小间距
-  width: 100%;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 // 单个图片预览
@@ -32,7 +31,7 @@
   background-size: cover;
   background-position: center;
   background-color: var(--white);
-  position: relative; // Needed for absolute positioning of children
+  position: relative;
 
   .attach-image-mask {
     position: absolute;
@@ -47,10 +46,12 @@
     align-items: flex-start;
     justify-content: flex-end;
     z-index: 1;
+    pointer-events: none;
   }
 
   &:hover .attach-image-mask {
     opacity: 1;
+    pointer-events: auto;
   }
 
   .delete-image {
@@ -68,13 +69,17 @@
   }
 }
 
-// 文件预览容器 (附件区下方)
+// 文件预览容器 (附件区右侧)
 .attach-files {
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   align-items: flex-start;
-  gap: 4px;             // (修改) 统一且减小间距
-  width: 100%;
+  gap: 3px;
+  margin-left: 10px;
+  flex-grow: 1;
+  flex-shrink: 1;
+  min-width: 120px;
 }
 
 // 单个文件预览项
@@ -86,15 +91,15 @@
   color: var(--black);
   font-size: 12px;
   border-radius: 4px;
-  padding: 4px 8px;    // (修改) 移除右侧为按钮留出的额外 padding
+  // !!! 内边距: 上, 右(普通间距), 下, 左
+  padding: 1px 8px 1px 4px;
   background-color: rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.1);
-  position: relative; // !!! 保持: 作为绝对定位按钮的参照物
+  position: relative; // !!! 作为绝对定位按钮的基准
   white-space: nowrap;
-  width: fit-content;  // 宽度由内容决定 (现在只包含图标/文本/正常padding)
+  width: fit-content;  // 宽度由内容决定
   max-width: 100%;
   line-height: 1.4;
-  overflow: visible; // !!! 添加: 确保绝对定位的按钮即使稍微超出也能显示
 
   .attach-file-icon {
     min-width: 16px;
@@ -107,28 +112,24 @@
   }
 
   .attach-file-name {
+    flex-grow: 0;
     flex-shrink: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    margin-right: 8px;
-    max-width: 150px;
-    // 注意: 按钮现在会覆盖在这上面
+    margin-right: 8px; // 与 token 的间距
+    max-width: 150px; // 文件名最大宽度
   }
 
   .attach-file-tokens {
     font-size: 10px;
     color: var(--second-text-color, #888);
-    margin-right: 4px; // 可以稍微增大这个值，避免与悬浮按钮过于接近
+    // margin-right: 4px; // 不需要了
     flex-shrink: 0;
-    // 注意: 按钮现在会覆盖在这上面
   }
 
-  // (保持) 文件删除按钮 - 绝对定位右上角
+  // 文件删除按钮 - 绝对定位，覆盖内容
   .delete-file {
-    position: absolute; // 绝对定位
-    top: 3px;           // 距顶部距离
-    right: 3px;          // 距右侧距离 (相对于容器的右上角)
     width: 16px;
     height: 16px;
     cursor: pointer;
@@ -137,20 +138,22 @@
     justify-content: center;
     border-radius: 3px;
     color: var(--second-text-color, #888);
-    background-color: rgba(255, 255, 255, 0.8); // 背景色
-    margin-left: 0;     // 无需外边距
     flex-shrink: 0;
-    opacity: 0; // 默认隐藏
+    opacity: 0;       // 默认隐藏
     pointer-events: none; // 默认不可交互
-    transition: opacity 0.2s ease, color 0.2s ease;
-    z-index: 2; // 确保在其他内容之上
+    transition: opacity 0.2s ease;
+    position: absolute; // !!! 绝对定位
+    right: 4px;         // !!! 距右边缘4px
+    top: 50%;           // !!! 垂直居中
+    transform: translateY(-50%); // !!! 精确垂直居中
+    background-color: rgba(255, 255, 255, 0.7); // !!! 半透明背景，覆盖时更清晰
 
     &:hover {
-      color: var(--danger-color, red);
+       color: var(--danger-color, red);
     }
   }
 
-  // (保持) 悬停时显示删除按钮
+  // 当鼠标悬停在整个文件项上时，显示删除按钮
   &:hover .delete-file {
     opacity: 1;
     pointer-events: auto;
@@ -689,7 +692,7 @@
 
 // --- 输入面板整体 ---
 .chat-input-panel {
-  position: relative;
+  position: relative; // 重要：发送按钮的定位基准
   width: 100%;
   padding: 0 20px 20px 20px;
   padding-top: 10px;
@@ -763,7 +766,7 @@
 .chat-input-panel-inner {
   cursor: text;
   display: flex;
-  flex-direction: column;
+  flex-direction: column; // 内部堆叠: 输入框 -> 附件区
   flex: 1;
   border-radius: 10px;
   border: var(--border-in-light);
@@ -782,7 +785,7 @@
   background-color: transparent;
   color: var(--black);
   font-family: inherit;
-  padding: 10px 90px 10px 14px;
+  padding: 10px 90px 10px 14px; // 内边距: 上, 右(为发送按钮), 下(默认), 左
   resize: none;
   outline: none;
   box-sizing: border-box;
@@ -793,24 +796,24 @@
 
 // 条件类：当有附件时，增加底部内边距以腾出空间给附件区显示
 .chat-input-with-attachments {
-  padding-bottom: 90px;
+  padding-bottom: 90px; // 示例值，确保大于附件区的最大高度 + 间距
 }
 
 // --- 发送按钮 ---
 .chat-input-send {
   background-color: var(--primary);
   color: white;
-  position: absolute;
-  right: 30px;
-  bottom: 32px;
-  padding: 8px;
+  position: absolute; // 相对于 .chat-input-panel 定位
+  right: 30px;        // 定位值
+  bottom: 32px;       // 定位值
+  padding: 8px;       // 按钮内边距
   border-radius: 5px;
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 5;
+  z-index: 5;         // 确保在输入框容器之上
 }
 
 // --- 输入区域移动端适配 ---
@@ -820,35 +823,34 @@
   }
 
   .chat-input-with-attachments {
-     padding-bottom: 75px;
+     padding-bottom: 75px; // 移动端示例值
   }
 
   .chat-input-send {
-    bottom: 30px;
-    right: 20px;
+    bottom: 30px; // 移动端定位值
+    right: 20px;  // 移动端右边距小一点
   }
 
   .attachments {
      max-height: 120px;
      padding: 5px 10px;
-     gap: 4px; // (修改) 统一且减小间距
   }
 
   .attach-files {
-      margin-left: 0;
-      width: 100%;
-      gap: 4px; // (修改) 统一且减小间距
+      margin-left: 8px;
+      min-width: 100px;
   }
 
-  // (修改) 移动端文件项样式
   .attach-file {
      font-size: 11px;
-     padding: 2px 6px; // (修改) 移除右侧为按钮留出的额外 padding，调整为适合移动端的值
+     padding: 1px 8px 1px 3px; // 移动端调整左右padding
      .attach-file-name {
-       max-width: calc(100% - 40px); // 可根据实际效果微调
+       max-width: 90px; // 移动端文件名最大宽度
      }
      .attach-file-tokens { font-size: 9px; }
-     // 按钮样式继承基础样式，绝对定位会生效
+     .delete-file {
+       right: 3px; // 移动端按钮右侧距离调整
+     }
   }
 }
 
