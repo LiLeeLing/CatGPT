@@ -10,8 +10,7 @@
 
 .attach-images,
 .attach-files {
-  width: 100%; // 强制占满一行
-  order: -1;
+  margin-bottom: 8px;
 }
 
 
@@ -811,8 +810,10 @@
   //flex-direction: column; // 让输入框和预览区垂直排列
   border-radius: 10px;
   border: var(--border-in-light);
-  align-items: flex-end; // 或者 center, stretch 等，根据需要调整
+  align-items: flex-end;
   position: relative; // 确保内部绝对定位的元素（如发送按钮）有参考
+  flex-wrap: wrap; // 允许预览区和输入框换行
+  gap: 8px; // 在换行元素之间增加间距
 }
 
 .chat-input-panel-inner-attach {
@@ -836,7 +837,7 @@
   resize: none;
   outline: none;
   flex-grow: 1; // 让输入框占据剩余空间
-  min-height: 68px; // 保持最小高度
+  min-height: 0; // 保持最小高度
 }
 
 .chat-input:focus {
