@@ -2220,6 +2220,59 @@ function _Chat() {
                     })}
                   </div>
                 )}
+            {/* 文件预览块开始 */}
+            {attachFiles.length > 0 && (
+              <div className={styles["attach-files"]}>
+                {attachFiles.map((file, index) => {
+                  // 获取文件扩展名用于图标
+                  const extension = file.name
+                    .split(".")
+                    .pop()
+                    ?.toLowerCase() as DefaultExtensionType | undefined;
+                  // 获取对应图标样式，如果扩展名无效则使用默认样式或不显示图标
+                  const iconStyle = extension ? defaultStyles[extension] : undefined;
+
+                  return (
+                    <div key={index} className={styles["attach-file"]}>
+                      <div className={styles["attach-file-icon"] + " no-dark"}>
+                        {/* 使用 react-file-icon 显示图标 */}
+                        {iconStyle ? (
+                          <FileIcon {...iconStyle} glyphColor="#303030" />
+                        ) : (
+                          // 可以放一个通用文件图标作为备用
+                          <span>📄</span>
+                        )}
+                      </div>
+                      <div className={styles["attach-file-info"]}>
+                        <span className={styles["attach-file-name"]} title={file.name}>
+                          {file.name}
+                        </span>
+                        {/* 可选：显示 Token 数量 */}
+                        {file.tokenCount !== undefined && (
+                          <span className={styles["attach-file-tokens"]}>
+                            ({file.tokenCount}K tokens)
+                          </span>
+                        )}
+                      </div>
+                      {/* 添加删除按钮 */}
+                      <div className={styles["attach-file-delete"]}>
+                        <IconButton
+                          icon={<DeleteIcon />}
+                          onClick={() => {
+                            setAttachFiles(
+                              attachFiles.filter((_, i) => i !== index)
+                            );
+                          }}
+                          bordered={false} // 或者根据你的样式调整
+                          title={Locale.Chat.Actions.Delete}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* 文件预览块结束 */}
                 <IconButton
                   icon={<SendWhiteIcon />}
                   text={Locale.Chat.Send}
