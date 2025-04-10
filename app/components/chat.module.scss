@@ -3,21 +3,23 @@
 // --- 附件预览区 (位于输入框内部下方) ---
 .attachments {
   display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  width: 100%;
+  flex-direction: column; // !!! 垂直堆叠 图片区 和 文件区
+  align-items: flex-start; // !!! 子元素靠左对齐
+  width: 100%;         // 占据内部容器宽度
   box-sizing: border-box;
-  padding: 8px 14px 5px 14px;
-  max-height: 150px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  padding: 8px 14px 5px 14px; // 内边距: 上(与文本间距), 右/左(与输入框边框对齐), 下
+  gap: 8px;            // !!! 图片区和文件区之间的垂直间距
+  max-height: 150px;   // 限制最大高度
+  overflow-y: auto;    // 超出高度时允许垂直滚动
+  overflow-x: hidden;  // 防止水平滚动条
 }
 
-// 图片预览容器 (附件区左侧)
+// 图片预览容器 (附件区上方)
 .attach-images {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: wrap; // 图片多时允许换行
+  gap: 8px;        // 图片之间的间距
+  width: 100%;     // 占据附件区可用宽度
   flex-shrink: 0;
 }
 
@@ -69,36 +71,35 @@
   }
 }
 
-// 文件预览容器 (附件区右侧)
+// 文件预览容器 (附件区下方)
 .attach-files {
   display: flex;
-  flex-direction: column;
+  flex-direction: column; // 文件垂直排列
   justify-content: flex-start;
-  align-items: flex-start;
-  gap: 3px;
-  margin-left: 10px;
-  flex-grow: 1;
+  align-items: flex-start; // 确保文件项靠左对齐
+  gap: 3px;             // 文件之间的垂直间距
+  // margin-left: 10px; // !!! 移除，因为现在是垂直堆叠，靠左对齐
+  width: 100%;          // 占据附件区可用宽度
   flex-shrink: 1;
-  min-width: 120px;
 }
 
 // 单个文件预览项
 .attach-file {
   cursor: default;
-  display: inline-flex;
+  display: inline-flex; // 使用 inline-flex 包裹内容
   flex-direction: row;
   align-items: center;
   color: var(--black);
   font-size: 12px;
   border-radius: 4px;
-  // !!! 内边距: 上, 右(普通间距), 下, 左
+  // 内边距: 上, 右(普通间距), 下, 左
   padding: 1px 8px 1px 4px;
   background-color: rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.1);
   position: relative; // !!! 作为绝对定位按钮的基准
   white-space: nowrap;
   width: fit-content;  // 宽度由内容决定
-  max-width: 100%;
+  max-width: 100%;     // 不超过父容器宽度
   line-height: 1.4;
 
   .attach-file-icon {
@@ -124,7 +125,6 @@
   .attach-file-tokens {
     font-size: 10px;
     color: var(--second-text-color, #888);
-    // margin-right: 4px; // 不需要了
     flex-shrink: 0;
   }
 
@@ -146,7 +146,8 @@
     right: 4px;         // !!! 距右边缘4px
     top: 50%;           // !!! 垂直居中
     transform: translateY(-50%); // !!! 精确垂直居中
-    background-color: rgba(255, 255, 255, 0.7); // !!! 半透明背景，覆盖时更清晰
+    background-color: rgba(255, 255, 255, 0.7); // 半透明背景，覆盖时更清晰
+    z-index: 3; // 确保在其他内容之上
 
     &:hover {
        color: var(--danger-color, red);
@@ -834,18 +835,23 @@
   .attachments {
      max-height: 120px;
      padding: 5px 10px;
+     // !!! 移动端强制列布局可能更好
+     flex-direction: column;
+     gap: 5px; // 移动端图片和文件间距
   }
 
   .attach-files {
-      margin-left: 8px;
-      min-width: 100px;
+      // !!! 如果上面改为column，则这里不再需要
+      // margin-left: 8px;
+      min-width: 100%; // 宽度占满
+      margin-left: 0; // 移除左边距
   }
 
   .attach-file {
      font-size: 11px;
-     padding: 1px 8px 1px 3px; // 移动端调整左右padding
+     padding: 1px 8px 1px 3px; // 保持左右padding
      .attach-file-name {
-       max-width: 90px; // 移动端文件名最大宽度
+       max-width: calc(100% - 50px); // !!! 移动端动态计算文件名宽度
      }
      .attach-file-tokens { font-size: 9px; }
      .delete-file {
