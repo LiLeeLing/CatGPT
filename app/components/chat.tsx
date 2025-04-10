@@ -1129,7 +1129,7 @@ function _Chat() {
     }
     setIsLoading(true);
     chatStore
-      .onUserInput(userInput, attachImages, attachFiles)
+      .onUserInput(userInput, attachImages, undefined, attachFiles)
       .then(() => setIsLoading(false));
     setAttachImages([]);
     setAttachFiles([]);
