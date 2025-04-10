@@ -804,17 +804,9 @@
 .chat-input-send {
   background-color: var(--primary);
   color: white;
-  position: absolute; // 相对于 .chat-input-panel 定位
-  right: 30px;        // 定位值
-  bottom: 32px;       // 定位值
-  padding: 8px;       // 按钮内边距
-  border-radius: 5px;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5;         // 确保在输入框容器之上
+  position: absolute;
+  right: 30px;
+  bottom: 32px;
 }
 
 // --- 输入区域移动端适配 ---
@@ -829,7 +821,7 @@
 
   .chat-input-send {
     bottom: 30px; // 移动端定位值
-    right: 20px;  // 移动端右边距小一点
+    //right: 20px;  // 移动端右边距小一点
   }
 
   .attachments {
