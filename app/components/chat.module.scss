@@ -17,7 +17,7 @@
 .attach-images {
   display: flex;
   flex-wrap: wrap; // 图片多时允许换行
-  gap: 8px;        // 图片之间的间距 (略微减小)
+  gap: 8px;        // 图片之间的间距
   flex-shrink: 0;  // 防止图片区域被压缩
 }
 
@@ -31,7 +31,7 @@
   background-size: cover;
   background-position: center;
   background-color: var(--white);
-  position: relative; // 为了删除按钮的定位
+  position: relative;
 
   .attach-image-mask {
     position: absolute;
@@ -43,9 +43,9 @@
     transition: all ease 0.2s;
     background-color: rgba(0, 0, 0, 0.3);
     display: flex;
-    align-items: flex-start; // 删除按钮放右上角
+    align-items: flex-start;
     justify-content: flex-end;
-    z-index: 1; // !!! 确保遮罩在图片内容之上
+    z-index: 1;
   }
 
   &:hover .attach-image-mask {
@@ -53,7 +53,7 @@
   }
 
   .delete-image {
-    width: 20px;  // 保持按钮大小
+    width: 20px;
     height: 20px;
     cursor: pointer;
     display: flex;
@@ -61,9 +61,9 @@
     justify-content: center;
     border-radius: 3px;
     background-color: rgba(255, 255, 255, 0.8);
-    margin: 3px; // 与边缘距离
+    margin: 3px;
     color: var(--danger-color, red);
-    z-index: 2; // !!! 确保删除按钮在遮罩之上
+    z-index: 2;
   }
 }
 
@@ -72,29 +72,31 @@
   display: flex;
   flex-direction: column; // 文件垂直排列
   justify-content: flex-start;
-  gap: 3px;             // !!! 文件之间的垂直间距减小
+  align-items: flex-start; // !!! 确保子项从左边开始对齐
+  gap: 3px;             // 文件之间的垂直间距
   margin-left: 10px;    // 与左侧图片区域的间距
   flex-grow: 1;         // 占据剩余的水平空间
   flex-shrink: 1;       // 允许在空间不足时收缩
-  min-width: 120px;     // !!! 最小宽度减小
+  min-width: 120px;
 }
 
 // 单个文件预览项
 .attach-file {
   cursor: default;
-  display: flex;
-  flex-direction: row; // 图标、名称、Token 水平排列
-  align-items: center; // 垂直居中对齐
+  display: inline-flex; // !!! 改为 inline-flex 使其包裹内容
+  flex-direction: row;
+  align-items: center;
   color: var(--black);
   font-size: 12px;
   border-radius: 4px;
-  padding: 1px 4px;    // !!! 减小内边距，使其更紧凑
+  padding: 1px 4px;
   background-color: rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.1);
   position: relative;
   white-space: nowrap;
-  max-width: 100%;
-  line-height: 1.4;    // !!! 明确行高
+  width: fit-content;  // !!! 宽度由内容决定
+  max-width: 100%;     // !!! 但不超过父容器宽度
+  line-height: 1.4;
 
   .attach-file-icon {
     min-width: 16px;
@@ -107,13 +109,13 @@
   }
 
   .attach-file-name {
-    flex-grow: 1;
+    flex-grow: 0; // !!! 不再需要 grow
     flex-shrink: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     margin-right: 8px;
-    max-width: 180px; // !!! 设置一个更明确的最大宽度
+    max-width: 150px; // !!! 设置一个合适的最大宽度来触发省略号
   }
 
   .attach-file-tokens {
@@ -150,7 +152,7 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 5px;
-  margin-bottom: 10px; // 按钮与下方输入框容器的间距
+  margin-bottom: 10px;
 
   &-end {
     display: flex;
@@ -543,7 +545,7 @@
   }
 }
 
-// --- 消息内容项 (文本、图片、文件等的容器) ---
+// --- 消息内容项 ---
 .chat-message-item {
   box-sizing: border-box;
   max-width: 100%;
@@ -678,14 +680,14 @@
 .chat-input-panel {
   position: relative; // 重要：发送按钮的定位基准
   width: 100%;
-  padding: 0 20px 20px 20px; // 面板外围的左右下边距
-  padding-top: 10px;        // 面板外围的上边距 (在按钮上方)
+  padding: 0 20px 20px 20px;
+  padding-top: 10px;
   box-sizing: border-box;
   display: flex;
-  flex-direction: column; // 堆叠: 按钮 -> 输入框容器
+  flex-direction: column;
   border-top: var(--border-in-light);
   box-shadow: var(--card-shadow);
-  background-color: var(--input-panel-bg, var(--white)); // 面板背景
+  background-color: var(--input-panel-bg, var(--white));
 }
 
 // --- 文本单行省略混入 ---
@@ -780,8 +782,7 @@
 
 // 条件类：当有附件时，增加底部内边距以腾出空间给附件区显示
 .chat-input-with-attachments {
-  // 示例值，确保大于附件区的最大高度 + 间距
-  padding-bottom: 90px;
+  padding-bottom: 90px; // 示例值，确保大于附件区的最大高度 + 间距
 }
 
 // --- 发送按钮 ---
@@ -819,23 +820,18 @@
   .attachments {
      max-height: 120px;
      padding: 5px 10px;
-     // 考虑移动端强制列布局?
-     // flex-direction: column;
   }
 
   .attach-files {
       margin-left: 8px;
       min-width: 100px;
-      // 如果 .attachments 在移动端改为 column 布局:
-      // margin-left: 0;
-      // margin-top: 8px;
   }
 
   .attach-file {
      font-size: 11px;
-     padding: 1px 3px; // 移动端更紧凑的内边距
+     padding: 1px 3px;
      .attach-file-name {
-       max-width: 120px; // 移动端更小的文件名最大宽度
+       max-width: 120px; // 移动端文件名最大宽度
      }
      .attach-file-tokens { font-size: 9px; }
   }
