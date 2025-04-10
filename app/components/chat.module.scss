@@ -1,27 +1,18 @@
-// @import "../styles/animation.scss";
+@import "../styles/animation.scss";
 
-/*.attachments {
+.attachments {
   position: absolute;
   left: 30px;
   bottom: 32px;
   display: flex;
   flex-direction: row;
-}*/
-
-.attach-images,
-.attach-files {
-  //margin-bottom: 8px;
-  width: 100%;
 }
-
 
 .attach-images {
   //position: absolute;
   //left: 30px;
   //bottom: 32px;
   display: flex;
-  gap: 8px;
-  padding-bottom: 8px;
 }
 
 .attach-image {
@@ -30,167 +21,110 @@
   height: 64px;
   border: rgba($color: #888, $alpha: 0.2) 1px solid;
   border-radius: 5px;
-  //margin-right: 10px;
+  margin-right: 10px;
   background-size: cover;
   background-position: center;
   background-color: var(--white);
-  position: relative;
-
-  &:hover .attach-image-mask {
-    opacity: 1;
-  }
-
 
   .attach-image-mask {
     width: 100%;
     height: 100%;
     opacity: 0;
     transition: all ease 0.2s;
-    display: flex;
-    justify-content: flex-end;
-    align-items: flex-start;
-    background-color: rgba(0, 0, 0, 0.3);
-    border-radius: 5px;
   }
 
   .attach-image-mask:hover {
     opacity: 1;
   }
 
-  .delete-image { // 图片的删除按钮样式 (与文件删除按钮区分)
-    width: 18px;
-    height: 18px;
+  .delete-image {
+    width: 24px;
+    height: 24px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.8);
-    margin: 4px;
-    box-shadow: var(--card-shadow);
-
-    svg {
-      width: 10px;
-      height: 10px;
-      fill: var(--black);
-    }
+    border-radius: 5px;
+    float: right;
+    background-color: var(--white);
   }
 }
 
-
 .attach-files {
+  //position: absolute;
+  //left: 30px;
+  //bottom: 32px;
   display: flex;
-  flex-direction: column; // 确保垂直排列
-  gap: 8px; // 文件项之间的垂直间距
-  padding: 8px 0; // 上下内边距
-  max-height: 150px; // 增加最大高度以容纳多个文件
-  overflow-y: auto; // 超出高度时显示滚动条
-  width: 100%; // 占据可用宽度
-  box-sizing: border-box;
+  flex-direction: column;
+  //row-gap: 11px;
+  max-height: 64px;
 }
 
 .attach-file {
-  display: flex;
-  align-items: center; // 垂直居中图标、信息、删除按钮
-  background-color: var(--input-bg); // 添加背景色
-  border-radius: 4px; // 添加圆角
-  padding: 6px 10px; // 调整内边距
-  gap: 8px; // 图标、信息、删除按钮之间的水平间距
-  border: 1px solid var(--border-light-color); // 添加边框
-  width: 100%; // 占据父容器宽度
-  box-sizing: border-box;
-  position: relative; // 为了绝对定位删除按钮
   cursor: default;
-  overflow: hidden; // 防止内部元素溢出
+  display: flex;
+  flex-direction: row;
+  column-gap: 4px;
+  justify-content: flex-start;
+  color: var(--black);
+  font-size: 14px;
+  border-radius: 5px;
+  margin-right: 10px;
 
-  &:hover .attach-file-delete { // 悬停时显示删除按钮
+  %attach-file-name-common {
+     display:flex;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+  }
+  .attach-file-name-full {
+    @extend %attach-file-name-common;
+    max-width:calc(62vw);
+     }
+
+  .attach-file-name-half {
+    @extend %attach-file-name-common;
+    max-width:calc(45vw);
+  }
+
+  .attach-file-name-less {
+    @extend %attach-file-name-common;
+    max-width:calc(28vw);
+  }
+
+  .attach-file-name-min {
+    @extend %attach-file-name-common;
+    max-width:calc(12vw);
+      }
+  .attach-file-icon {
+    min-width: 16px;
+    max-width: 16px;
+  }
+
+  .attach-file-icon:hover {
+    opacity: 0;
+  }
+
+  .attach-image-mask {
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: all ease 0.2s;
+    position: absolute;
+  }
+
+  .attach-image-mask:hover {
     opacity: 1;
   }
 
-
-      .attach-file-icon {
-        width: 20px; // 固定图标宽度
-        height: 24px; // 固定图标高度
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0; // 防止图标被压缩
-
-        // 确保 react-file-icon 的 SVG 充满容器
-        :global(.file-icon) {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          svg {
-            width: 100%;
-            height: 100%;
-          }
-        }
-        // 备用图标样式 (如果使用 <span>📄</span>)
-        span {
-          font-size: 18px;
-        }
-
-  // .attach-file-icon:hover {
-    // opacity: 0;
-  // }
-
-  .attach-file-info { // 新增：包裹文件名和 Token
-    display: flex;
-    flex-direction: column; // 文件名和 token 上下排列
-    overflow: hidden; // 防止文字溢出容器
-    flex-grow: 1; // 占据剩余空间
-    min-width: 0; // 重要：允许在 flex 布局中缩小
-  }
-
-  .attach-file-name { // 新增：替换所有旧的 attach-file-name-*
-    font-size: 12px;
-    line-height: 1.3;
-    color: var(--text-color);
-    overflow: hidden; // 隐藏溢出部分
-    white-space: nowrap; // 不换行
-    text-overflow: ellipsis; // 显示省略号
-  }
-
-  .attach-file-tokens { // 新增：Token 数量样式
-    font-size: 10px;
-    line-height: 1.2;
-    color: var(--text-light-color); // 使用浅色
-    margin-top: 2px;
-  }
-
-  .attach-file-delete { // 新增：替换旧的 .delete-image in .attach-file
-    position: absolute;
-    top: -6px; // 调整位置使其稍微突出
-    right: -6px;
-    opacity: 0; // 默认隐藏
-    transition: opacity 0.2s ease-in-out;
-    background-color: rgba(128, 128, 128, 0.7); // 半透明背景
-    border-radius: 50%; // 圆形
-    padding: 1px; // 微调内边距
+  .delete-image {
+    width: 16px;
+    height: 20px;
     cursor: pointer;
-    z-index: 1; // 确保在最上层
-    display: flex; // 使用 flex 居中图标
-    align-items: center;
-    justify-content: center;
-
-    // 针对内部 IconButton 的样式 (如果直接用 IconButton 组件)
-    :global(.icon-button) {
-      padding: 0;
-      width: 16px; // 按钮大小
-      height: 16px;
-      background: none; // 去掉 IconButton 默认背景
-      border: none; // 去掉 IconButton 默认边框
-      box-shadow: none; // 去掉 IconButton 默认阴影
-
-      svg {
-        width: 10px; // 图标大小
-        height: 10px;
-        fill: white; // 删除图标颜色
-      }
-    }
+    border-radius: 5px;
+    float: left;
+    background-color: var(--white);
   }
 }
 
@@ -199,14 +133,6 @@
 .chat-input-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 5px;
-
-  &-end {
-    display: flex;
-    margin-left: auto;
-    gap: 5px;
-  }
 
   .chat-input-action {
     display: inline-flex;
@@ -223,6 +149,10 @@
     height: 16px;
     width: var(--icon-width);
     overflow: hidden;
+
+    &:not(:last-child) {
+      margin-right: 5px;
+    }
 
     .text {
       white-space: nowrap;
@@ -389,12 +319,10 @@
 
   animation: slide-in ease 0.3s;
 
-  $linear: linear-gradient(
-    to right,
-    rgba(0, 0, 0, 0),
-    rgba(0, 0, 0, 1),
-    rgba(0, 0, 0, 0)
-  );
+  $linear: linear-gradient(to right,
+      rgba(0, 0, 0, 0),
+      rgba(0, 0, 0, 1),
+      rgba(0, 0, 0, 0));
   mask-image: $linear;
 
   @mixin show {
@@ -533,7 +461,7 @@
   }
 }
 
-.chat-message-user > .chat-message-container {
+.chat-message-user>.chat-message-container {
   align-items: flex-end;
 }
 
@@ -603,25 +531,6 @@
   transition: all ease 0.3s;
 }
 
-.chat-message-audio {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-radius: 10px;
-  background-color: rgba(0, 0, 0, 0.05);
-  border: var(--border-in-light);
-  position: relative;
-  transition: all ease 0.3s;
-  margin-top: 10px;
-  font-size: 14px;
-  user-select: text;
-  word-break: break-word;
-  box-sizing: border-box;
-  audio {
-    height: 30px; /* 调整高度 */
-  }
-}
-
 .chat-message-item-image {
   width: 100%;
   margin-top: 10px;
@@ -678,7 +587,7 @@
 
 
 @media only screen and (max-width: 600px) {
-  $calc-image-width: calc(100vw / 3 * 2 / var(--image-count));
+  $calc-image-width: calc(100vw/3*2/var(--image-count));
 
   .chat-message-item-image-multi {
     width: $calc-image-width;
@@ -686,18 +595,13 @@
   }
 
   .chat-message-item-image {
-    max-width: calc(100vw / 3 * 2);
+    max-width: calc(100vw/3*2);
   }
 }
 
 @media screen and (min-width: 600px) {
-  $max-image-width: calc(
-    calc(1200px - var(--sidebar-width)) / 3 * 2 / var(--image-count)
-  );
-  $image-width: calc(
-    calc(var(--window-width) - var(--sidebar-width)) / 3 * 2 /
-      var(--image-count)
-  );
+  $max-image-width: calc(calc(1200px - var(--sidebar-width))/3*2/var(--image-count));
+  $image-width: calc(calc(var(--window-width) - var(--sidebar-width))/3*2/var(--image-count));
 
   .chat-message-item-image-multi {
     width: $image-width;
@@ -707,7 +611,7 @@
   }
 
   .chat-message-item-image {
-    max-width: calc(calc(1200px - var(--sidebar-width)) / 3 * 2);
+    max-width: calc(calc(1200px - var(--sidebar-width))/3*2);
   }
 }
 
@@ -725,7 +629,7 @@
   z-index: 1;
 }
 
-.chat-message-user > .chat-message-container > .chat-message-item {
+.chat-message-user>.chat-message-container>.chat-message-item {
   background-color: var(--second);
 
   &:hover {
@@ -808,13 +712,8 @@
   cursor: text;
   display: flex;
   flex: 1;
-  //flex-direction: column; // 让输入框和预览区垂直排列
   border-radius: 10px;
   border: var(--border-in-light);
-  align-items: flex-end;
-  position: relative; // 确保内部绝对定位的元素（如发送按钮）有参考
-  flex-wrap: wrap; // 允许预览区和输入框换行
-  gap: 8px; // 在换行元素之间增加间距
 }
 
 .chat-input-panel-inner-attach {
@@ -837,12 +736,11 @@
   padding: 10px 90px 10px 14px;
   resize: none;
   outline: none;
-  flex-grow: 1; // 让输入框占据剩余空间
-  min-height: 0; // 保持最小高度
+  box-sizing: border-box;
+  min-height: 68px;
 }
 
-.chat-input:focus {
-}
+.chat-input:focus {}
 
 .chat-input-send {
   background-color: var(--primary);
@@ -851,10 +749,6 @@
   position: absolute;
   right: 30px;
   bottom: 32px;
-
-  margin-left: 10px; // 与输入区分隔
-   flex-shrink: 0; // 防止按钮被压缩
-
 }
 
 @media only screen and (max-width: 600px) {
@@ -913,32 +807,4 @@
 .shortcut-key span {
   font-size: 12px;
   color: var(--black);
-}
-
-.chat-main {
-  display: flex;
-  height: 100%;
-  width: 100%;
-  position: relative;
-  overflow: hidden;
-  .chat-body-container {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    width: 100%;
-  }
-  .chat-side-panel {
-    position: absolute;
-    inset: 0;
-    background: var(--white);
-    overflow: hidden;
-    z-index: 10;
-    transform: translateX(100%);
-    transition: all ease 0.3s;
-    &-show {
-      transform: translateX(0);
-    }
-  }
-}
 }
