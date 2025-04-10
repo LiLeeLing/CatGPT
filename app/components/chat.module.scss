@@ -5,7 +5,7 @@
   display: flex;
   flex-direction: column; // !!! 改为列布局，图片区在上，文件区在下
   align-items: flex-start; // !!! 子元素靠左对齐
-  gap: 8px;              // !!! 图片区和文件区之间的垂直间距
+  gap: 8px;              // 图片区和文件区之间的垂直间距 (保持 8px)
   width: 100%;           // 占据内部容器宽度
   box-sizing: border-box;
   padding: 8px 14px 5px 14px; // 内边距: 上, 右/左, 下
@@ -18,7 +18,7 @@
 .attach-images {
   display: flex;
   flex-wrap: wrap; // 图片多时允许换行
-  gap: 8px;        // 图片之间的间距
+  gap: 8px;        // 图片之间的间距 (保持 8px)
   width: 100%;     // 占据附件区宽度，确保换行正确
 }
 
@@ -32,7 +32,7 @@
   background-size: cover;
   background-position: center;
   background-color: var(--white);
-  position: relative;
+  position: relative; // Needed for absolute positioning of children
 
   .attach-image-mask {
     position: absolute;
@@ -44,8 +44,8 @@
     transition: all ease 0.2s;
     background-color: rgba(0, 0, 0, 0.3);
     display: flex;
-    align-items: flex-start;
-    justify-content: flex-end;
+    align-items: flex-start; // Align items (button) to the top
+    justify-content: flex-end; // Justify items (button) to the right
     z-index: 1;
   }
 
@@ -53,6 +53,7 @@
     opacity: 1;
   }
 
+  // 图片删除按钮 (在遮罩内，通过遮罩的对齐方式定位)
   .delete-image {
     width: 20px;
     height: 20px;
@@ -61,10 +62,10 @@
     align-items: center;
     justify-content: center;
     border-radius: 3px;
-    background-color: rgba(255, 255, 255, 0.8);
-    margin: 3px;
+    background-color: rgba(255, 255, 255, 0.8); // Has background
+    margin: 3px; // Small margin for spacing from corner
     color: var(--danger-color, red);
-    z-index: 2;
+    z-index: 2; // Above mask
   }
 }
 
@@ -72,9 +73,8 @@
 .attach-files {
   display: flex;
   flex-direction: column; // 文件垂直排列
-  align-items: flex-start; // !!! 文件项靠左对齐
-  gap: 3px;             // 文件之间的垂直间距
-  // margin-left: 10px; // !!! 移除左外边距
+  align-items: flex-start; // 文件项靠左对齐
+  gap: 8px;             // 文件之间的垂直间距 (保持 8px)
   width: 100%;           // 占据附件区宽度
 }
 
@@ -87,10 +87,11 @@
   color: var(--black);
   font-size: 12px;
   border-radius: 4px;
-  padding: 1px 4px;    // 紧凑内边距
+  // (修改) 增加右内边距为按钮腾出空间 (8px 原有 + 16px 按钮 + 4px 间隙)
+  padding: 4px 28px 4px 8px;
   background-color: rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.1);
-  position: relative;
+  position: relative; // !!! 添加: 作为绝对定位按钮的参照物
   white-space: nowrap;
   width: fit-content;  // 宽度由内容决定
   max-width: 100%;     // 不超过父容器宽度
@@ -113,6 +114,7 @@
     white-space: nowrap;
     margin-right: 8px;
     max-width: 150px; // 文件名最大宽度，触发省略
+    // 注意：如果文件名过长，它现在可能会在视觉上延伸到按钮下方
   }
 
   .attach-file-tokens {
@@ -122,27 +124,33 @@
     flex-shrink: 0;
   }
 
+  // (修改) 文件删除按钮 - 改为绝对定位右上角
   .delete-file {
-    width: 16px;
-    height: 16px;
+    position: absolute; // !!! 修改: 绝对定位
+    top: 3px;           // !!! 添加: 距顶部距离
+    right: 3px;          // !!! 添加: 距右侧距离
+    width: 16px;        // 保持 16px (或改为 20px 与图片按钮一致)
+    height: 16px;       // 保持 16px (或改为 20px 与图片按钮一致)
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 3px;
     color: var(--second-text-color, #888);
-    margin-left: 8px; // 与左侧元素间距
+    background-color: rgba(255, 255, 255, 0.8); // !!! 添加: 背景色，同图片按钮
+    margin-left: 0;     // !!! 移除: 不再需要左外边距
     flex-shrink: 0;
-    opacity: 0; // !!! 默认隐藏
-    pointer-events: none; // !!! 默认不可交互
-    transition: opacity 0.2s ease;
+    opacity: 0; // 默认隐藏
+    pointer-events: none; // 默认不可交互
+    transition: opacity 0.2s ease, color 0.2s ease; // 添加颜色过渡
+    z-index: 2;         // !!! 添加: 确保在其他内容之上
 
     &:hover {
-      color: var(--danger-color, red); // 悬停时变色（即使未显示时颜色也准备好）
+      color: var(--danger-color, red); // 悬停时变色 (按钮本身)
     }
   }
 
-  // !!! 悬停时显示删除按钮
+  // 悬停时显示删除按钮 (此逻辑依然有效)
   &:hover .delete-file {
     opacity: 1;
     pointer-events: auto;
@@ -760,7 +768,7 @@
   border-radius: 10px;
   border: var(--border-in-light);
   background-color: var(--white);
-  overflow: hidden;
+  overflow: hidden; // 防止绝对定位的按钮溢出边框
 
   &:has(.chat-input:focus) {
     border: 1px solid var(--primary);
@@ -823,23 +831,28 @@
   .attachments {
      max-height: 120px;
      padding: 5px 10px;
-     flex-direction: column; // !!! 移动端强制列布局
+     flex-direction: column; // 移动端强制列布局
      gap: 8px;
   }
 
   .attach-files {
-      margin-left: 0; // !!! 移除移动端列布局下的左边距
-      min-width: unset; // !!! 移除最小宽度限制
+      margin-left: 0; // 移除移动端列布局下的左边距
+      // min-width: unset; // 这个通常不需要在移动端改动 inline-flex 的行为
       width: 100%;     // 占据整行
   }
 
+  // (修改) 移动端文件项样式
   .attach-file {
      font-size: 11px;
-     padding: 1px 3px;
+     // (修改) 调整移动端右内边距，为按钮腾出空间 (3px 原有 + 16px 按钮 + 3px 间隙)
+     padding: 1px 22px 1px 3px;
      .attach-file-name {
-       max-width: calc(100% - 50px); // !!! 移动端动态计算文件名最大宽度 (减去图标、token、删除按钮的大致宽度)
+       // 保持动态计算，但注意按钮现在是绝对定位，不再直接影响 flex 布局计算
+       // max-width 本身还是有用的，防止文本过长
+       max-width: calc(100% - 50px); // 可根据实际效果微调
      }
      .attach-file-tokens { font-size: 9px; }
+     // 按钮样式继承基础样式，position/top/right 会生效
   }
 }
 
