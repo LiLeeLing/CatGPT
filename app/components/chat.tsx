@@ -126,7 +126,7 @@ import { getClientConfig } from "../config/client";
 import { useAllModels } from "../utils/hooks";
 import { ClientApi, MultimodalContent } from "../client/api";
 import { createTTSPlayer } from "../utils/audio";
-import { MsEdgeTTS, OUTPUT_FORMAT } from "../utils/ms_edge_tts";
+import { MsEdgeTTS, OUTPUT_FORMAT, PITCH } from "../utils/ms_edge_tts";
 
 import { isEmpty } from "lodash-es";
 import { getModelProvider } from "../utils/model";
@@ -1312,58 +1312,99 @@ function _Chat() {
   const [speechLoading, setSpeechLoading] = useState(false);
 
   async function openaiSpeech(text: string) {
+    // 获取最新的配置状态
+    const config = useAppConfig.getState();
+    const access = useAccessStore.getState(); // accessStore 可能仍用于其他目的，保留获取
+
+    // 检查 TTS 是否启用
+    if (!config.ttsConfig.enable) {
+      showToast(Locale.Settings.TTS.Disabled);
+      return;
+    }
+
+    // 准备纯文本内容
+    const { markdownToTxt } = require("markdown-to-txt"); // 或者使用 import
+    const textContent = markdownToTxt(text);
+    if (!textContent) {
+      showToast(Locale.Chat.Actions.NoTextToSpeak);
+      return;
+    }
+
+    // 如果正在播放，则停止
     if (speechStatus) {
       ttsPlayer.stop();
       setSpeechStatus(false);
-    } else {
-      var api: ClientApi;
-      api = new ClientApi(ModelProvider.GPT);
-      const config = useAppConfig.getState();
-      setSpeechLoading(true);
-      ttsPlayer.init();
-      let audioBuffer: ArrayBuffer;
-      const { markdownToTxt } = require("markdown-to-txt");
-      const textContent = markdownToTxt(text);
-      if (config.ttsConfig.engine !== DEFAULT_TTS_ENGINE) {
-        const edgeVoiceName = accessStore.edgeVoiceName;
+      setSpeechLoading(false); // 确保停止时也重置 loading
+      return;
+    }
+
+    setSpeechLoading(true);
+    ttsPlayer.init();
+    let audioBuffer: ArrayBuffer | null = null;
+
+    try {
+      // --- Edge TTS 逻辑 ---
+      if (config.ttsConfig.engine === "Edge-TTS") {
+        const edgeVoiceName = config.ttsConfig.edgeTTSVoiceName;
+        const edgePitch = config.ttsConfig.edgeTTSPitch;
+        const speedRate = config.ttsConfig.speed;
+
         const tts = new MsEdgeTTS();
+        // 设置元数据（声音和格式）
         await tts.setMetadata(
           edgeVoiceName,
-          OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3,
+          OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3, // 你可以选择其他合适的格式
         );
-        audioBuffer = await tts.toArrayBuffer(textContent)
-        .catch((e) => {
-          console.error("[Edge TTS Error]", e);
-          setSpeechLoading(false);
-          showToast(prettyObject(e));
-          throw e; // 抛出错误以阻止后续播放
-        });
 
-      } else {
+        // 准备韵律选项（音调和速率）
+        const prosodyOptions = {
+          pitch: edgePitch,
+          rate: speedRate, // 直接使用 speed 值 (假设库接受 0.25-4.0 范围)
+        };
+
+        // 合成语音到 ArrayBuffer
+        audioBuffer = await tts.toArrayBuffer(textContent, prosodyOptions);
+      }
+      // --- OpenAI TTS 逻辑 ---
+      // 定位点: DEFAULT_TTS_ENGINE
+      else if (config.ttsConfig.engine === DEFAULT_TTS_ENGINE || config.ttsConfig.engine === "OpenAI-TTS") { // 兼容旧常量和新字符串
+        // 确保 OpenAI API Key 或 Access Code 存在
+        if (!access.openaiApiKey && !access.accessCode) {
+           showToast(Locale.Error.Unauthorized);
+           setSpeechLoading(false);
+           return;
+        }
+        const api = new ClientApi(ModelProvider.GPT); // 或者根据 provider 选择
         audioBuffer = await api.llm.speech({
           model: config.ttsConfig.model,
           input: textContent,
           voice: config.ttsConfig.voice,
           speed: config.ttsConfig.speed,
-        })
-        .catch((e) => {
-          console.error("[OpenAI Speech API Error]", e);
-          setSpeechLoading(false);
-          showToast(prettyObject(e));
-          throw e; // 抛出错误以阻止后续播放
         });
+      } else {
+        // 可以选择支持其他引擎或显示错误
+        showToast(`TTS engine "${config.ttsConfig.engine}" is not supported.`);
+        setSpeechLoading(false);
+        return;
       }
-      setSpeechStatus(true);
-      ttsPlayer
-        .play(audioBuffer, () => {
-          setSpeechStatus(false);
-        })
-        .catch((e) => {
-          console.error("[OpenAI Speech]", e);
-          showToast(prettyObject(e));
-          setSpeechStatus(false);
-        })
-        .finally(() => setSpeechLoading(false));
+
+      // --- 播放逻辑 ---
+      if (audioBuffer) {
+        setSpeechStatus(true);
+        await ttsPlayer.play(audioBuffer, () => {
+          setSpeechStatus(false); // 播放完成时更新状态
+        });
+      } else {
+         // 如果 audioBuffer 为 null (例如引擎不支持或合成失败)，确保重置状态
+         setSpeechStatus(false);
+      }
+
+    } catch (error) {
+      console.error("[TTS Synthesis Error]", error);
+      showToast(prettyObject(error)); // 显示格式化后的错误信息
+      setSpeechStatus(false); // 出错时重置状态
+    } finally {
+      setSpeechLoading(false); // 无论成功或失败，最终都停止 loading
     }
   }
 
