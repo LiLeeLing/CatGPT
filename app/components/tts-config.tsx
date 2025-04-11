@@ -7,9 +7,10 @@ import {
   DEFAULT_TTS_ENGINES,
   DEFAULT_TTS_MODELS,
   DEFAULT_TTS_VOICES,
-  DEFAULT_EDGE_TTS_VOICES, // <--- 导入 Edge 声音列表
+  DEFAULT_EDGE_TTS_VOICES,
 } from "../constant";
 import { InputRange } from "./input-range";
+import { PITCH } from "../utils/ms_edge_tts"; // <--- 新增: 导入 PITCH 枚举
 
 export function TTSConfigList(props: {
   ttsConfig: TTSConfig;
@@ -36,8 +37,8 @@ export function TTSConfigList(props: {
       {/* 只有在 TTS 启用时才显示后续选项 */}
       {props.ttsConfig.enable && (
         <>
-          {/* Autoplay 选项 (如果需要，取消注释) */}
-          {/* <ListItem
+          {/* Autoplay 选项 */}
+          <ListItem
             title={Locale.Settings.TTS.Autoplay.Title}
             subTitle={Locale.Settings.TTS.Autoplay.SubTitle}
           >
@@ -50,7 +51,7 @@ export function TTSConfigList(props: {
                 )
               }
             ></input>
-          </ListItem> */}
+          </ListItem>
 
           {/* TTS 引擎选择 */}
           <ListItem title={Locale.Settings.TTS.Engine}>
@@ -120,16 +121,16 @@ export function TTSConfigList(props: {
                   ))}
                 </Select>
               </ListItem>
-              {/* Speed 设置移到外面 */}
+              {/* OpenAI Speed 设置移到通用部分 */}
             </>
           )}
 
-          {/* 新增: Edge TTS 特定选项 */}
+          {/* Edge TTS 特定选项 */}
           {props.ttsConfig.engine === "Edge-TTS" && (
             <>
               <ListItem
-                title={Locale.Settings.TTS.Voice.Title} // 复用标题，或者创建新的 Locale.Settings.TTS.EdgeVoice.Title
-                subTitle={Locale.Settings.TTS.Voice.SubTitle} // 复用副标题，或者创建新的
+                title={Locale.Settings.TTS.Voice.Title} // 复用标题
+                subTitle={Locale.Settings.TTS.Voice.SubTitle} // 复用副标题
               >
                 <Select
                   aria-label={Locale.Settings.TTS.Voice.Title} // 复用 aria-label
@@ -137,12 +138,10 @@ export function TTSConfigList(props: {
                   onChange={(e) => {
                     props.updateConfig(
                       (config) =>
-                        // 使用验证器或类型断言
                         (config.edgeTTSVoiceName =
                           TTSConfigValidator.edgeTTSVoiceName(
                             e.currentTarget.value,
                           )),
-                      // 或者: (config.edgeTTSVoiceName = e.currentTarget.value as TTSEdgeVoiceType)
                     );
                   }}
                 >
@@ -153,7 +152,35 @@ export function TTSConfigList(props: {
                   ))}
                 </Select>
               </ListItem>
-              {/* 如果 Edge TTS 有独立的 Speed 设置，放在这里 */}
+
+              {/* 新增: Edge TTS 音调选择 */}
+              <ListItem
+                title={Locale.Settings.TTS.EdgePitch?.Title || "音调"} // 使用 Locale，提供默认值
+                subTitle={Locale.Settings.TTS.EdgePitch?.SubTitle || "调整声音的音高"} // 使用 Locale，提供默认值
+              >
+                <Select
+                  aria-label={Locale.Settings.TTS.EdgePitch?.Title || "音调"}
+                  value={props.ttsConfig.edgeTTSPitch}
+                  onChange={(e) => {
+                    props.updateConfig(
+                      (config) =>
+                        (config.edgeTTSPitch = TTSConfigValidator.edgeTTSPitch( // 使用验证器
+                          e.currentTarget.value,
+                        )),
+                    );
+                  }}
+                >
+                  {Object.values(PITCH).map((pitchValue) => (
+                    <option key={pitchValue} value={pitchValue}>
+                      {/* 显示友好的标签，例如大写首字母 */}
+                      {pitchValue.charAt(0).toUpperCase() + pitchValue.slice(1)}
+                      {/* 或者使用 Locale.Pitch[pitchValue] 进行翻译 */}
+                    </option>
+                  ))}
+                  {/* 如果需要支持自定义字符串，可以在这里添加逻辑 */}
+                </Select>
+              </ListItem>
+              {/* Edge TTS Speed 设置移到通用部分 */}
             </>
           )}
 

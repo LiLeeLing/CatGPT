@@ -456,15 +456,57 @@ export const DEFAULT_TTS_VOICES = [
 ];
 
 // 新增: Edge-TTS 默认声音和列表
-export const DEFAULT_EDGE_TTS_VOICE = "zh-CN-XiaoxiaoNeural"; // 选一个常见的作为默认值
-export const DEFAULT_EDGE_TTS_VOICES = [ // 添加一些示例声音，可以根据需要扩展
-  "zh-CN-XiaoxiaoNeural", // 晓晓
-  "zh-CN-YunxiNeural",    // 云希
-  "zh-CN-YunjianNeural",  // 云健
-  "zh-CN-XiaoyiNeural",   // 晓伊
-  "zh-CN-YunyangNeural",  // 云扬
-  "en-US-JennyNeural",    // 英语示例
-  "en-US-AriaNeural",     // 英语示例
+export const DEFAULT_EDGE_TTS_VOICE = "zh-CN-XiaoshuangNeural"; // 选一个常见的作为默认值
+export const DEFAULT_EDGE_TTS_VOICES = [
+  // --- 简体中文 (zh-CN) ---
+  "zh-CN-XiaoshuangNeural", // 萝莉
+  "zh-CN-XiaochenNeural", // 女声 (年轻，活泼)
+  "zh-CN-XiaohanNeural",  // 女声 (年轻，自然)
+  "zh-CN-XiaoxuanNeural", // 女声 (年轻，对话感)
+  "zh-CN-XiaomengNeural", // 女声 (年轻，新闻感)
+  "zh-CN-XiaoyiNeural",   // 女声 (较年轻，温柔)
+  "zh-CN-XiaoxiaoNeural", // 女声 (标准，略成熟)
+  "zh-CN-XiaoyanNeural",  // 女声 (标准，略成熟)
+  "zh-CN-YunyangNeural",  // 男声
+  "zh-CN-YunxiNeural",    // 男声
+  "zh-CN-YunjianNeural",  // 男声
+  "zh-CN-liaoning-XiaobeiNeural", // 女声 (辽宁)
+  "zh-CN-shaanxi-XiaoniNeural",   // 女声 (陕西)
+  "zh-CN-liaoning-YunbiaoNeural", // 男声 (辽宁)
+  "zh-CN-henan-YundengNeural", // 男声 (河南)
+  "zh-CN-shandong-YunxiangNeural", // 男声 (山东)
+  "zh-CN-sichuan-YunxiNeural", // 男声 (四川)
+
+  // --- 繁体中文 (zh-TW/HK) ---
+  "zh-TW-HsiaoChenNeural", // 女声 (台湾)
+  "zh-TW-HsiaoYuNeural",   // 女声 (台湾)
+  "zh-HK-HiuMaanNeural",   // 女声 (香港)
+  "zh-HK-HiuGaaiNeural",   // 女声 (香港)
+  "zh-TW-YunJheNeural",    // 男声 (台湾)
+  "zh-HK-WanLungNeural",   // 男声 (香港)
+
+
+
+  // --- 英文 (en-US / en-GB) ---
+  "en-US-JennyNeural",    // 女声 (美国, 通用)
+  "en-US-AriaNeural",     // 女声 (美国, 新闻/对话)
+  "en-GB-SoniaNeural",    // 女声 (英国)
+  "en-GB-LibbyNeural",    // 女声 (英国)
+  "en-US-GuyNeural",      // 男声 (美国)
+  "en-US-DavisNeural",    // 男声 (美国)
+  "en-GB-RyanNeural",     // 男声 (英国)
+
+
+  // --- 日文 (ja-JP) ---
+  "ja-JP-AoiNeural",      // 女声 (可爱/年轻)
+  "ja-JP-NanamiNeural",   // 女声 (标准)
+  "ja-JP-KeitaNeural",    // 男声
+  "ja-JP-DaichiNeural",   // 男声
+
+  // --- 其他语言示例 (可选) ---
+  "ko-KR-SunHiNeural",    // 韩语 女声
+  "fr-FR-DeniseNeural",   // 法语 女声
+  "de-DE-KatjaNeural",    // 德语 女声
   // 更多声音可以在 Edge TTS 文档中查找: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts
 ];
 

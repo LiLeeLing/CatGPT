@@ -1130,7 +1130,12 @@ function _Chat() {
     setIsLoading(true);
     chatStore
       .onUserInput(userInput, attachImages, undefined, attachFiles)
-      .then(() => setIsLoading(false));
+      .then(() => setIsLoading(false)) // <--- 确保这里没有分号
+      .catch((error) => {
+        setIsLoading(false);
+        console.error("[Chat] Submit Error:", error);
+        showToast(Locale.Error.RequestError); // 假设 Locale.Error.RequestError 存在
+      });
     setAttachImages([]);
     setAttachFiles([]);
     chatStore.setLastInput(userInput);
@@ -1189,7 +1194,7 @@ function _Chat() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [session.id, session.mask.syncGlobalConfig, config.modelConfig]);
 
   // check if should send message
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1320,21 +1325,32 @@ function _Chat() {
       const { markdownToTxt } = require("markdown-to-txt");
       const textContent = markdownToTxt(text);
       if (config.ttsConfig.engine !== DEFAULT_TTS_ENGINE) {
-        //const edgeVoiceName = accessStore.edgeVoiceName();
-        const config = useAppConfig.getState(); // 确保获取到最新的 config
-        const edgeVoiceName = config.ttsConfig.edgeTTSVoiceName;
+        const edgeVoiceName = accessStore.edgeVoiceName();
         const tts = new MsEdgeTTS();
         await tts.setMetadata(
           edgeVoiceName,
           OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3,
         );
-        audioBuffer = await tts.toArrayBuffer(textContent);
+        audioBuffer = await tts.toArrayBuffer(textContent)
+        .catch((e) => {
+          console.error("[Edge TTS Error]", e);
+          setSpeechLoading(false);
+          showToast(prettyObject(e));
+          throw e; // 抛出错误以阻止后续播放
+        });
+
       } else {
         audioBuffer = await api.llm.speech({
           model: config.ttsConfig.model,
           input: textContent,
           voice: config.ttsConfig.voice,
           speed: config.ttsConfig.speed,
+        })
+        .catch((e) => {
+          console.error("[OpenAI Speech API Error]", e);
+          setSpeechLoading(false);
+          showToast(prettyObject(e));
+          throw e; // 抛出错误以阻止后续播放
         });
       }
       setSpeechStatus(true);
@@ -1528,7 +1544,7 @@ function _Chat() {
       localStorage.setItem(key, dom?.value ?? "");
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session.id]); // 添加 session.id 作为依赖项
 
   const handlePaste = useCallback(
     async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
