@@ -2250,7 +2250,7 @@ function _Chat() {
                         {/* 可选：显示 Token 数量 */}
                         {file.tokenCount !== undefined && (
                           <span className={styles["attach-file-tokens"]}>
-                            ({file.tokenCount}K tokens)
+                            ({file.tokenCount}K)
                           </span>
                         )}
                       </div>
