@@ -1130,7 +1130,7 @@ function _Chat() {
     setIsLoading(true);
     chatStore
       .onUserInput(userInput, attachImages, undefined, attachFiles)
-      .then(() => setIsLoading(false));
+      .then(() => setIsLoading(false)) // <--- 确保这里没有分号
       .catch((error) => {
         setIsLoading(false);
         console.error("[Chat] Submit Error:", error);
