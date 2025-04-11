@@ -42,6 +42,7 @@ export interface MultimodalContent {
     url: string;
     name: string;
     tokenCount?: number;
+    mimeType?: string;
   };
 }
 
@@ -54,6 +55,10 @@ export interface UploadFile {
 export interface MultimodalContentForAlibaba {
   text?: string;
   image?: string;
+  url: string;
+  detail?: "low" | "high" | "auto"; // 可选，与 typing.ts 保持一致
+};
+file_url?: UploadFile; // 使用 UploadFile 类型
 }
 
 export interface RequestMessage {

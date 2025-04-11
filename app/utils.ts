@@ -296,12 +296,9 @@ export function getMessageTextContent(message: RequestMessage) {
   if (typeof message.content === "string") {
     return message.content;
   }
-  for (const c of message.content) {
-    if (c.type === "text") {
-      return c.text ?? "";
-    }
-  }
-  return "";
+  // --- 确认逻辑：找到第一个 text 类型的 content part ---
+  const textPart = message.content.find(part => part.type === 'text');
+  return textPart?.text ?? ""; // 返回找到的第一个文本内容，或空字符串
 }
 
 export function getMessageTextContentWithoutThinking(message: RequestMessage) {

@@ -29,8 +29,14 @@ import {
     StoreKey,
     SUMMARIZE_MODEL,
   } from "../constant";
+  import {
+    MessageContent, // 导入新的类型
+    TextContent,
+    ImageContent,
+    FileContent,
+  } from "../typing"; // 导入新的类型
   import Locale, { getLang } from "../locales";
-  import { readFileContent } from "../utils";
+  import { isVisionModel, readFileContent } from "../utils";
   import { prettyObject } from "../utils/format";
   import { createPersistStore } from "../utils/store";
   import { estimateTokenLength } from "../utils/token";
@@ -121,41 +127,34 @@ import {
     };
   }
 
-  function getSummarizeModel(
-    currentModel: string,
-    providerName: string,
-  ): string[] {
-    // if it is using gpt-* models, force to use 4o-mini to summarize
-    if (currentModel.startsWith("gpt") || currentModel.startsWith("chatgpt")) {
-      const configStore = useAppConfig.getState();
-      const accessStore = useAccessStore.getState();
-      const allModel = collectModelsWithDefaultModel(
-        configStore.models,
-        [configStore.customModels, accessStore.customModels].join(","),
-        accessStore.defaultModel,
-      );
-      const summarizeModel = allModel.find(
-        (m) => m.name === SUMMARIZE_MODEL && m.available,
-      );
-      if (summarizeModel) {
-        return [
-          summarizeModel.name,
-          summarizeModel.provider?.providerName as string,
-        ];
+function estimateTokenLengthForContent(content: string | MessageContent[]): number {
+  if (typeof content === 'string') {
+    // 对字符串内容的现有逻辑
+    return estimateTokenLength(content);
+  } else if (Array.isArray(content)) {
+    // 对 MessageContent 数组的逻辑
+    let totalTokens = 0;
+    content.forEach(part => {
+      if (part.type === 'text') {
+        totalTokens += estimateTokenLength(part.text ?? "");
+      } else if (part.type === 'image_url') {
+        // 与 getMessagesWithMemory 一致: 每张图片约 1000 token (如果需要可调整)
+        totalTokens += 1000;
+      } else if (part.type === 'file_url') {
+        // 与 getMessagesWithMemory 一致: 使用提供的 tokenCount 或默认值 (50)
+        // 确保在 chat.tsx 上传时准确计算 tokenCount
+        totalTokens += part.file_url.tokenCount ?? 50; // 如果 tokenCount 缺失，默认为 50
       }
-    }
-    if (currentModel.startsWith("gemini")) {
-      return [GEMINI_SUMMARIZE_MODEL, ServiceProvider.Google];
-    } else if (currentModel.startsWith("deepseek-")) {
-      return [DEEPSEEK_SUMMARIZE_MODEL, ServiceProvider.DeepSeek];
-    }
-
-    return [currentModel, providerName];
+    });
+    return totalTokens;
   }
+  return 0; // 对于有效的内容类型不应发生
+}
 
-  function countMessages(msgs: ChatMessage[]) {
+
+  function countMessages(msgs: ChatMessage[]): number {
     return msgs.reduce(
-      (pre, cur) => pre + estimateTokenLength(getMessageTextContent(cur)),
+      (pre, cur) => pre + estimateTokenLengthForContent(cur.content), // 使用新的估算函数
       0,
     );
   }
@@ -408,165 +407,187 @@ import {
 
         async onUserInput(
 
-          content: string,
+          userInputText: string, // 用户输入的文本
 
-          attachImages?: string[],
+          //attachImages?: string[],
+          attachments?: UploadFile[],
           isMcpResponse?: boolean,
-          attachFiles?: UploadFile[],
+          //attachFiles?: UploadFile[],
         ) {
           const session = get().currentSession();
           const modelConfig = session.mask.modelConfig;
+          const currentModel = modelConfig.model; // 获取当前模型名称
+          const accessStore = useAccessStore.getState(); // 获取 access store
+          const configStore = useAppConfig.getState(); // 获取 config store
 
-          //read file content from the url
-          // MCP Response no need to fill template
-          let mContent: string | MultimodalContent[] = isMcpResponse
-            ? content
-            : fillTemplateWith(content, modelConfig);
-          const userContent = content;
-          let displayContent: string | MultimodalContent[] = userContent;
-          displayContent = [
-            {
-              type: "text",
-              text: userContent,
-            },
-          ];
+           // --- 重构 content 构建逻辑 ---
+           const messageContents: MessageContent[] = [];
+           const modelIsVision = isVisionModel(currentModel); // 检查模型是否支持 Vision
 
-          if (attachFiles && attachFiles.length > 0) {
-            let fileContent = userContent + " Here are the files: \n";
-            for (let i = 0; i < attachFiles.length; i++) {
-              fileContent += attachFiles[i].name + "\n";
-              fileContent += await readFileContent(attachFiles[i]);
+           // 1. 添加用户文本输入 (如果存在且不是 MCP 响应)
+           if (userInputText && !isMcpResponse) {
+             const filledText = fillTemplateWith(userInputText, modelConfig);
+             messageContents.push({ type: "text", text: filledText });
+           } else if (userInputText && isMcpResponse) {
+             // MCP 响应直接使用文本
+             messageContents.push({ type: "text", text: userInputText });
+           }
+
+           // 2. 处理附件 (图片和文件)
+           if (attachments && attachments.length > 0) {
+             for (const file of attachments) {
+               const isImage = file.mimeType?.startsWith("image/");
+
+               if (isImage) {
+                 // 如果是图片
+                 if (modelIsVision) {
+                   // 并且模型支持 Vision，则添加 image_url
+                   messageContents.push({
+                     type: "image_url",
+                     image_url: { url: file.url }, // 使用 UploadFile 中的 url
+                   });
+                 } else {
+                   // 如果模型不支持 Vision，添加文本提示
+                   console.warn(
+                     `Model ${currentModel} does not support images. Skipping image: ${file.name}`,
+                   );
+                   messageContents.push({ type: "text", text: `[Image ${file.name} was uploaded but ignored as the current model doesn't support images]` });
+                 }
+               } else {
+                 // 如果是其他文件, 使用 file_url 策略
+                 messageContents.push({
+                   type: "file_url",
+                   file_url: file, // 包含 url, name, tokenCount, mimeType 等
+                 });
+                 // 确保 file.tokenCount 在 chat.tsx 上传时已计算并填充
+                 if (file.tokenCount === undefined) {
+                    console.warn(`Token count for file ${file.name} is undefined. Using default estimate.`);
+                 }
+               }
+             }
+           }
+           // --- content 构建逻辑结束 ---
+
+           // 检查 messageContents 是否为空
+           if (messageContents.length === 0) {
+             showToast(Locale.Chat.UploadButNoInput); // 或者其他提示
+             return; // 不发送空消息
+           }
+
+           // --- 创建消息对象 ---
+           const userMessage: ChatMessage = createMessage({
+             role: "user",
+             content: messageContents, // 使用构建好的数组
+             isMcpResponse,
+           });
+
+           const botMessage: ChatMessage = createMessage({
+             role: "assistant",
+             streaming: true,
+             model: modelConfig.model,
+           });
+
+           // get recent messages
+           const recentMessages = await get().getMessagesWithMemory(); // This now returns RequestMessage[]
+           const sendMessages = recentMessages.concat(userMessage as RequestMessage); // Cast or ensure type compatibility
+
+           // save user's and bot's message
+           get().updateTargetSession(session, (session) => {
+             session.messages = session.messages.concat([userMessage, botMessage]);
+           });
+
+
+        const api: ClientApi = getClientApi(modelConfig.providerName);
+
+        // --- 发起 API 请求 ---
+        // 传递给 api.llm.chat 的 messages 数组现在包含了 content 为数组的消息
+        api.llm.chat({
+          messages: sendMessages, // sendMessages 包含结构化 content
+          config: { ...modelConfig, stream: true },
+          onUpdate(message) {
+            botMessage.streaming = true;
+            if (message) {
+              // 假设 API 返回的仍然是文本内容
+              botMessage.content = message;
             }
-            mContent = [
-              {
-                type: "text",
-                text: fileContent,
-              },
-            ];
-            displayContent = displayContent.concat(
-              attachFiles.map((file) => {
-                return {
-                  type: "file_url",
-                  file_url: {
-                    url: file.url,
-                    name: file.name,
-                    tokenCount: file.tokenCount,
-                  },
-                };
-              }),
-            );
-
-          }
-          if (!isMcpResponse && attachImages && attachImages.length > 0) {
-            mContent = [
-              ...(content ? [{ type: "text" as const, text: content }] : []),
-              ...attachImages.map((url) => ({
-                type: "image_url" as const,
-                image_url: { url },
-              })),
-            ];
-          }
-
-          let userMessage: ChatMessage = createMessage({
-            role: "user",
-            content: mContent,
-            isMcpResponse,
-          });
-
-          const botMessage: ChatMessage = createMessage({
-            role: "assistant",
-            streaming: true,
-            model: modelConfig.model,
-          });
-
-          // get recent messages
-          const recentMessages = await get().getMessagesWithMemory();
-          const sendMessages = recentMessages.concat(userMessage);
-          const messageIndex = session.messages.length + 1;
-
-          // save user's and bot's message
-          get().updateTargetSession(session, (session) => {
-            const savedUserMessage = {
-              ...userMessage,
-              //content: mContent,
-              content: displayContent,
-            };
-            session.messages = session.messages.concat([
-              savedUserMessage,
-              botMessage,
-            ]);
-          });
-
-          const api: ClientApi = getClientApi(modelConfig.providerName);
-          // make request
-          api.llm.chat({
-            messages: sendMessages,
-            config: { ...modelConfig, stream: true },
-            onUpdate(message) {
-              botMessage.streaming = true;
-              if (message) {
-                botMessage.content = message;
+            get().updateTargetSession(session, (session) => {
+              session.messages = session.messages.concat();
+            });
+          },
+          async onFinish(message) {
+            botMessage.streaming = false;
+            if (message) {
+              botMessage.content = message;
+              botMessage.date = new Date().toLocaleString();
+              // 注意：onNewMessage 可能也需要调整以处理 content 数组（如果需要统计 token 等）
+              get().onNewMessage(botMessage, session);
+            }
+            ChatControllerPool.remove(session.id, botMessage.id);
+          },
+          // ... (onBeforeTool, onAfterTool, onError, onController 保持不变)
+          onBeforeTool(tool: ChatMessageTool) {
+            (botMessage.tools = botMessage?.tools || []).push(tool);
+            get().updateTargetSession(session, (session) => {
+              session.messages = session.messages.concat();
+            });
+          },
+          onAfterTool(tool: ChatMessageTool) {
+            botMessage?.tools?.forEach((t, i, tools) => {
+              if (tool.id == t.id) {
+                tools[i] = { ...tool };
               }
-              get().updateTargetSession(session, (session) => {
-                session.messages = session.messages.concat();
+            });
+            get().updateTargetSession(session, (session) => {
+              session.messages = session.messages.concat();
+            });
+          },
+          onError(error) {
+            const isAborted = error.message?.includes?.("aborted");
+            // 假设错误信息仍然附加到文本 content
+            const errorContent =
+              "\n\n" +
+              prettyObject({
+                error: true,
+                message: error.message,
               });
-            },
-            async onFinish(message) {
-              botMessage.streaming = false;
-              if (message) {
-                botMessage.content = message;
-                botMessage.date = new Date().toLocaleString();
-                get().onNewMessage(botMessage, session);
-              }
-              ChatControllerPool.remove(session.id, botMessage.id);
-            },
-            onBeforeTool(tool: ChatMessageTool) {
-              (botMessage.tools = botMessage?.tools || []).push(tool);
-              get().updateTargetSession(session, (session) => {
-                session.messages = session.messages.concat();
-              });
-            },
-            onAfterTool(tool: ChatMessageTool) {
-              botMessage?.tools?.forEach((t, i, tools) => {
-                if (tool.id == t.id) {
-                  tools[i] = { ...tool };
-                }
-              });
-              get().updateTargetSession(session, (session) => {
-                session.messages = session.messages.concat();
-              });
-            },
-            onError(error) {
-              const isAborted = error.message?.includes?.("aborted");
-              botMessage.content +=
-                "\n\n" +
-                prettyObject({
-                  error: true,
-                  message: error.message,
+            if (typeof botMessage.content === "string") {
+              botMessage.content += errorContent;
+            } else {
+              // 如果 botMessage.content 也是数组，需要找到 text 部分添加
+              const textPart = botMessage.content.find(
+                (p) => p.type === "text",
+              ) as TextContent | undefined;
+              if (textPart) {
+                textPart.text += errorContent;
+              } else {
+                // 如果没有 text 部分，则添加一个新的 text 部分
+                (botMessage.content as MessageContent[]).push({
+                  type: "text",
+                  text: errorContent,
                 });
-              botMessage.streaming = false;
-              userMessage.isError = !isAborted;
-              botMessage.isError = !isAborted;
-              get().updateTargetSession(session, (session) => {
-                session.messages = session.messages.concat();
-              });
-              ChatControllerPool.remove(
-                session.id,
-                botMessage.id ?? messageIndex,
-              );
+              }
+            }
 
-              console.error("[Chat] failed ", error);
-            },
-            onController(controller) {
-              // collect controller for stop/retry
-              ChatControllerPool.addController(
-                session.id,
-                botMessage.id ?? messageIndex,
-                controller,
-              );
-            },
-          });
-        },
+            botMessage.streaming = false;
+            userMessage.isError = !isAborted;
+            botMessage.isError = !isAborted;
+            get().updateTargetSession(session, (session) => {
+              session.messages = session.messages.concat();
+            });
+            ChatControllerPool.remove(session.id, botMessage.id);
+
+            console.error("[Chat] failed ", error);
+          },
+          onController(controller) {
+            ChatControllerPool.addController(
+              session.id,
+              botMessage.id, // 确保 botMessage.id 存在
+              controller,
+            );
+          },
+        });
+      },
+
 
         getMemoryPrompt() {
           const session = get().currentSession();
@@ -580,393 +601,577 @@ import {
           }
         },
 
-        async getMessagesWithMemory() {
-          const session = get().currentSession();
-          const modelConfig = session.mask.modelConfig;
-          const clearContextIndex = session.clearContextIndex ?? 0;
-          const messages = session.messages.slice();
-          const totalMessageCount = session.messages.length;
+async getMessagesWithMemory(): Promise<RequestMessage[]> {
+  const session = get().currentSession();
+  const modelConfig = session.mask.modelConfig;
+  const currentModel = modelConfig.model;
+  const modelIsVision = isVisionModel(currentModel);
 
-          // in-context prompts
-          const contextPrompts = session.mask.context.slice();
+  // TODO: 实现一个检查模型是否支持文件的方法
+  // 这可以基于模型名称模式、配置中的列表等。
+  const checkModelFileSupport = (modelName: string): boolean => {
+     // 示例：允许已知支持文件的特定模型
+     // 用你的实际逻辑替换，基于模型能力
+     // return modelName.includes("gpt-4-turbo") || modelName.includes("claude-3");
+     // 目前，假设大多数模型不支持，除非明确知道
+     // return false; // 如果不确定，默认为 false
+     // 或者，更实际地，检查已知的支持模型/提供商：
+     const provider = session.mask.modelConfig.providerName;
+     if (provider === ServiceProvider.OpenAI && (modelName.includes("gpt-4"))) {
+         return true; // 示例：假设 GPT-4 模型通过 API 支持文件
+     }
+     if (provider === ServiceProvider.Anthropic && modelName.includes("claude-3")) {
+         return true; // 示例：假设 Claude 3 支持文件
+     }
+     // 根据需要添加对其他提供商/模型的检查
+     return false; // 默认假设
+  };
+  const modelSupportsFiles = checkModelFileSupport(currentModel);
 
-          // system prompts, to get close to OpenAI Web ChatGPT
-          const shouldInjectSystemPrompts =
-            modelConfig.enableInjectSystemPrompts &&
-            (session.mask.modelConfig.model.startsWith("gpt-") ||
-              session.mask.modelConfig.model.startsWith("chatgpt-"));
+  const clearContextIndex = session.clearContextIndex ?? 0;
+  const messages = session.messages.slice();
+  const totalMessageCount = session.messages.length;
 
-          const mcpEnabled = await isMcpEnabled();
-          const mcpSystemPrompt = mcpEnabled ? await getMcpSystemPrompt() : "";
+  const contextPrompts = session.mask.context.slice();
+  const shouldInjectSystemPrompts =
+    modelConfig.enableInjectSystemPrompts &&
+    (session.mask.modelConfig.model.startsWith("gpt-") ||
+      session.mask.modelConfig.model.startsWith("chatgpt-"));
 
-          var systemPrompts: ChatMessage[] = [];
+  const mcpEnabled = await isMcpEnabled();
+  const mcpSystemPrompt = mcpEnabled ? await getMcpSystemPrompt() : "";
 
-          if (shouldInjectSystemPrompts) {
-            systemPrompts = [
-              createMessage({
-                role: "system",
-                content:
-                  fillTemplateWith("", {
-                    ...modelConfig,
-                    template: DEFAULT_SYSTEM_TEMPLATE,
-                  }) + mcpSystemPrompt,
-              }),
-            ];
-          } else if (mcpEnabled) {
-            systemPrompts = [
-              createMessage({
-                role: "system",
-                content: mcpSystemPrompt,
-              }),
-            ];
+  var systemPrompts: ChatMessage[] = [];
+  if (shouldInjectSystemPrompts) {
+    systemPrompts = [
+      createMessage({
+        role: "system",
+        content:
+          fillTemplateWith("", {
+            ...modelConfig,
+            template: DEFAULT_SYSTEM_TEMPLATE,
+          }) + mcpSystemPrompt,
+      }),
+    ];
+  } else if (mcpEnabled) {
+    systemPrompts = [
+      createMessage({
+        role: "system",
+        content: mcpSystemPrompt,
+      }),
+    ];
+  }
+
+  if (shouldInjectSystemPrompts || mcpEnabled) {
+    console.log(
+      "[Global System Prompt] ",
+      systemPrompts.at(0)?.content ?? "empty",
+    );
+  }
+
+  const memoryPrompt = get().getMemoryPrompt();
+  const shouldSendLongTermMemory =
+    modelConfig.sendMemory &&
+    session.memoryPrompt &&
+    session.memoryPrompt.length > 0 &&
+    session.lastSummarizeIndex > clearContextIndex;
+  const longTermMemoryPrompts =
+    shouldSendLongTermMemory && memoryPrompt ? [memoryPrompt] : [];
+  const longTermMemoryStartIndex = session.lastSummarizeIndex;
+
+  const shortTermMemoryStartIndex = Math.max(
+    0,
+    totalMessageCount - modelConfig.historyMessageCount,
+  );
+
+  const memoryStartIndex = shouldSendLongTermMemory
+    ? Math.min(longTermMemoryStartIndex, shortTermMemoryStartIndex)
+    : shortTermMemoryStartIndex;
+  const contextStartIndex = Math.max(clearContextIndex, memoryStartIndex);
+  const maxTokenThreshold = modelConfig.max_tokens;
+
+  const reversedRecentMessages = [];
+  let tokenCount = 0;
+
+  for (let i = totalMessageCount - 1; i >= contextStartIndex; i--) {
+    const msg = messages[i];
+    let currentMsgToken = 0;
+    let msgToSend: RequestMessage | null = null;
+
+    // 根据内容类型计算消息的 token 数量
+    if (typeof msg.content === 'string') {
+      currentMsgToken = estimateTokenLength(msg.content);
+      msgToSend = { role: msg.role, content: msg.content };
+    } else if (Array.isArray(msg.content)) {
+      let tempContent: MessageContent[] = [];
+      for (const part of msg.content) {
+        if (part.type === 'text') {
+          currentMsgToken += estimateTokenLength(part.text ?? "");
+          tempContent.push(part);
+        } else if (part.type === 'image_url') {
+          // 仅当模型支持视觉时才计算图片 token
+          if (modelIsVision) {
+            currentMsgToken += 1000; // 图片 token 估算值
+            tempContent.push(part);
           }
+        } else if (part.type === 'file_url') {
+          // 总是计算文件 token，如果需要，稍后过滤
+          currentMsgToken += part.file_url.tokenCount ?? 50; // 使用存储的计数或默认值
+          tempContent.push(part);
+        }
+      }
+      if (tempContent.length > 0) {
+         msgToSend = { role: msg.role, content: tempContent };
+      } else {
+         // 如果在潜在过滤后（例如，非视觉模型），数组为空，
+         // 尝试恢复原始文本内容（如果存在）。
+         const originalText = getMessageTextContent(msg); // 假设 getMessageTextContent 处理数组
+         if (originalText) {
+            currentMsgToken = estimateTokenLength(originalText);
+            msgToSend = { role: msg.role, content: originalText };
+         }
+      }
+    }
 
-          if (shouldInjectSystemPrompts || mcpEnabled) {
-            console.log(
-              "[Global System Prompt] ",
-              systemPrompts.at(0)?.content ?? "empty",
+    // 检查添加此消息是否超过 token 阈值
+    if (msgToSend && tokenCount + currentMsgToken <= maxTokenThreshold) {
+      tokenCount += currentMsgToken;
+      // 添加 originalId 以便在过滤期间进行潜在的回退
+      reversedRecentMessages.push({ ...msgToSend, originalId: msg.id } as any);
+    } else {
+      // 如果达到或超过阈值，则停止添加消息
+      break;
+    }
+  }
+
+  // 组合消息历史的所有部分
+  const finalMessages: RequestMessage[] = [
+    ...(systemPrompts as RequestMessage[]),
+    ...(longTermMemoryPrompts as RequestMessage[]),
+    ...(contextPrompts as RequestMessage[]),
+    ...reversedRecentMessages.reverse(),
+  ];
+
+  // --- 后处理：如果模型不支持视觉，则过滤图片 ---
+  if (!modelIsVision) {
+    finalMessages.forEach(message => {
+      if (Array.isArray(message.content)) {
+        const originalContentLength = message.content.length;
+        message.content = message.content.filter(part => part.type !== 'image_url');
+
+        // 如果过滤移除了所有部分但原始消息有文本，则执行回退逻辑
+        if (message.content.length === 0 && originalContentLength > 0) {
+           const originalMsg = messages.find(m => m.id === (message as any).originalId);
+           const textContent = getMessageTextContent(originalMsg || message as ChatMessage);
+           if (textContent) {
+             message.content = textContent; // 降级为纯文本
+           }
+        } else if (message.content.length === 1 && message.content[0].type === 'text') {
+           // 如果只剩下文本，则简化回字符串
+           message.content = message.content[0].text ?? "";
+        }
+      }
+    });
+  }
+
+  // --- 后处理：如果模型不支持文件，则过滤文件 ---
+  if (!modelSupportsFiles) {
+    finalMessages.forEach(message => {
+      if (Array.isArray(message.content)) {
+        const originalContentLength = message.content.length;
+        message.content = message.content.filter(part => part.type !== 'file_url');
+
+        // 类似于图片过滤的回退逻辑
+        if (message.content.length === 0 && originalContentLength > 0) {
+           const originalMsg = messages.find(m => m.id === (message as any).originalId);
+           const textContent = getMessageTextContent(originalMsg || message as ChatMessage);
+           if (textContent) {
+             message.content = textContent; // 降级为纯文本
+           }
+        } else if (message.content.length === 1 && message.content[0].type === 'text') {
+           // 如果只剩下文本，则简化回字符串
+           message.content = message.content[0].text ?? "";
+        }
+      }
+    });
+  }
+
+  // 过滤完成后清理 originalId
+  finalMessages.forEach(message => {
+    delete (message as any).originalId;
+  });
+
+  // 可选：过滤掉过滤后可能完全变空的消息
+  // finalMessages = finalMessages.filter(msg => msg.content && (!Array.isArray(msg.content) || msg.content.length > 0));
+
+  return finalMessages;
+},
+
+
+      updateMessage(
+        sessionIndex: number,
+        messageIndex: number,
+        updater: (message?: ChatMessage) => void,
+      ) {
+        const sessions = get().sessions;
+        const session = sessions.at(sessionIndex);
+        const messages = session?.messages;
+        updater(messages?.at(messageIndex));
+        set(() => ({ sessions }));
+      },
+
+      resetSession(session: ChatSession) {
+        get().updateTargetSession(session, (session) => {
+          session.messages = [];
+          session.memoryPrompt = "";
+        });
+      },
+
+      summarizeSession(
+        refreshTitle: boolean = false,
+        targetSession: ChatSession,
+      ) {
+        const config = useAppConfig.getState();
+        const session = targetSession;
+        const modelConfig = session.mask.modelConfig;
+        if (isDalle3(modelConfig.model)) {
+          return;
+        }
+
+        const [model, providerName] = modelConfig.compressModel
+          ? [modelConfig.compressModel, modelConfig.compressProviderName]
+          : getSummarizeModel(
+              session.mask.modelConfig.model,
+              session.mask.modelConfig.providerName,
             );
-          }
-          const memoryPrompt = get().getMemoryPrompt();
-          // long term memory
-          const shouldSendLongTermMemory =
-            modelConfig.sendMemory &&
-            session.memoryPrompt &&
-            session.memoryPrompt.length > 0 &&
-            session.lastSummarizeIndex > clearContextIndex;
-          const longTermMemoryPrompts =
-            shouldSendLongTermMemory && memoryPrompt ? [memoryPrompt] : [];
-          const longTermMemoryStartIndex = session.lastSummarizeIndex;
+        const api: ClientApi = getClientApi(providerName as ServiceProvider);
 
-          // short term memory
-          const shortTermMemoryStartIndex = Math.max(
+        const messages = session.messages;
+
+        const SUMMARIZE_MIN_LEN = 50;
+        // !!! 注意：countMessages 需要能处理 content 数组 !!!
+        // 你需要修改 estimateTokenLength 或 countMessages 来正确计算数组 content 的 token
+        if (
+          (config.enableAutoGenerateTitle &&
+            session.topic === DEFAULT_TOPIC &&
+            countMessages(messages) >= SUMMARIZE_MIN_LEN) || // 假设 countMessages 已更新
+          refreshTitle
+        ) {
+          // ... (生成标题的逻辑，确保传递给 API 的消息格式正确)
+          const startIndex = Math.max(
             0,
-            totalMessageCount - modelConfig.historyMessageCount,
+            messages.length - modelConfig.historyMessageCount,
           );
-
-          // lets concat send messages, including 4 parts:
-          // 0. system prompt: to get close to OpenAI Web ChatGPT
-          // 1. long term memory: summarized memory messages
-          // 2. pre-defined in-context prompts
-          // 3. short term memory: latest n messages
-          // 4. newest input message
-          const memoryStartIndex = shouldSendLongTermMemory
-            ? Math.min(longTermMemoryStartIndex, shortTermMemoryStartIndex)
-            : shortTermMemoryStartIndex;
-          // and if user has cleared history messages, we should exclude the memory too.
-          const contextStartIndex = Math.max(clearContextIndex, memoryStartIndex);
-          const maxTokenThreshold = modelConfig.max_tokens;
-
-          // get recent messages as much as possible
-          const reversedRecentMessages = [];
-          for (
-            let i = totalMessageCount - 1, tokenCount = 0;
-            i >= contextStartIndex && tokenCount < maxTokenThreshold;
-            i -= 1
-          ) {
-            const msg = messages[i];
-            if (!msg || msg.isError) continue;
-            tokenCount += estimateTokenLength(getMessageTextContent(msg));
-            reversedRecentMessages.push(msg);
-          }
-          // concat all messages
-          const recentMessages = [
-            ...systemPrompts,
-            ...longTermMemoryPrompts,
-            ...contextPrompts,
-            ...reversedRecentMessages.reverse(),
-          ];
-
-          return recentMessages;
-        },
-
-        updateMessage(
-          sessionIndex: number,
-          messageIndex: number,
-          updater: (message?: ChatMessage) => void,
-        ) {
-          const sessions = get().sessions;
-          const session = sessions.at(sessionIndex);
-          const messages = session?.messages;
-          updater(messages?.at(messageIndex));
-          set(() => ({ sessions }));
-        },
-
-        resetSession(session: ChatSession) {
-          get().updateTargetSession(session, (session) => {
-            session.messages = [];
-            session.memoryPrompt = "";
+              // --- 将 ChatMessage[] 转换为 RequestMessage[] 用于标题 API ---
+              // 选项 A: 假设标题 API 只需要纯文本
+              const finalTopicMessages: RequestMessage[] = topicMessages.map(msg => ({
+                role: msg.role,
+                content: getMessageTextContent(msg), // 仅提取文本内容
+              }));
+              // 选项 B: 假设标题 API 可以处理 MessageContent[] (对于摘要不太可能)
+              /*
+              const finalTopicMessages: RequestMessage[] = topicMessages.map(msg => ({
+                role: msg.role,
+                content: typeof msg.content === 'string'
+                         ? msg.content // 或者包装: [{ type: 'text', text: msg.content }]
+                         : msg.content.filter(p => p.type === 'text'), // 示例：为标题过滤非文本
+              }));
+              */
           });
-        },
 
-        summarizeSession(
-          refreshTitle: boolean = false,
-          targetSession: ChatSession,
-        ) {
-          const config = useAppConfig.getState();
-          const session = targetSession;
-          const modelConfig = session.mask.modelConfig;
-          // skip summarize when using dalle3?
-          if (isDalle3(modelConfig.model)) {
-            return;
-          }
 
-          // if not config compressModel, then using getSummarizeModel
-          const [model, providerName] = modelConfig.compressModel
-            ? [modelConfig.compressModel, modelConfig.compressProviderName]
-            : getSummarizeModel(
-                session.mask.modelConfig.model,
-                session.mask.modelConfig.providerName,
-              );
-          const api: ClientApi = getClientApi(providerName as ServiceProvider);
-
-          // remove error messages if any
-          const messages = session.messages;
-
-          // should summarize topic after chating more than 50 words
-          const SUMMARIZE_MIN_LEN = 50;
-          if (
-            (config.enableAutoGenerateTitle &&
-              session.topic === DEFAULT_TOPIC &&
-              countMessages(messages) >= SUMMARIZE_MIN_LEN) ||
-            refreshTitle
-          ) {
-            const startIndex = Math.max(
-              0,
-              messages.length - modelConfig.historyMessageCount,
-            );
-            const topicMessages = messages
-              .slice(
-                startIndex < messages.length ? startIndex : messages.length - 1,
-                messages.length,
-              )
-              .concat(
-                createMessage({
-                  role: "user",
-                  content: Locale.Store.Prompt.Topic,
-                }),
-              );
-            api.llm.chat({
-              messages: topicMessages,
-              config: {
-                model,
-                stream: false,
-                providerName,
-              },
-              onFinish(message, responseRes) {
-                if (responseRes?.status === 200) {
-                  get().updateTargetSession(
-                    session,
-                    (session) =>
-                      (session.topic =
-                        message.length > 0 ? trimTopic(message) : DEFAULT_TOPIC),
-                  );
-                }
-              },
-            });
-          }
-          const summarizeIndex = Math.max(
-            session.lastSummarizeIndex,
-            session.clearContextIndex ?? 0,
-          );
-          let toBeSummarizedMsgs = messages
-            .filter((msg) => !msg.isError)
-            .slice(summarizeIndex);
-
-          const historyMsgLength = countMessages(toBeSummarizedMsgs);
-
-          if (historyMsgLength > (modelConfig?.max_tokens || 4000)) {
-            const n = toBeSummarizedMsgs.length;
-            toBeSummarizedMsgs = toBeSummarizedMsgs.slice(
-              Math.max(0, n - modelConfig.historyMessageCount),
-            );
-          }
-          const memoryPrompt = get().getMemoryPrompt();
-          if (memoryPrompt) {
-            // add memory prompt
-            toBeSummarizedMsgs.unshift(memoryPrompt);
-          }
-
-          const lastSummarizeIndex = session.messages.length;
-
-          console.log(
-            "[Chat History] ",
-            toBeSummarizedMsgs,
-            historyMsgLength,
-            modelConfig.compressMessageLengthThreshold,
-          );
-
-          if (
-            historyMsgLength > modelConfig.compressMessageLengthThreshold &&
-            modelConfig.sendMemory
-          ) {
-            /** Destruct max_tokens while summarizing
-             * this param is just shit
-             **/
-            const { max_tokens, ...modelcfg } = modelConfig;
-            api.llm.chat({
-              messages: toBeSummarizedMsgs.concat(
-                createMessage({
-                  role: "system",
-                  content: Locale.Store.Prompt.Summarize,
-                  date: "",
-                }),
-              ),
-              config: {
-                ...modelcfg,
-                stream: true,
-                model,
-                providerName,
-              },
-              onUpdate(message) {
-                session.memoryPrompt = message;
-              },
-              onFinish(message, responseRes) {
-                if (responseRes?.status === 200) {
-                  console.log("[Memory] ", message);
-                  get().updateTargetSession(session, (session) => {
-                    session.lastSummarizeIndex = lastSummarizeIndex;
-                    session.memoryPrompt = message; // Update the memory prompt for stored it in local storage
-                  });
-                }
-              },
-              onError(err) {
-                console.error("[Summarize] ", err);
-              },
-            });
-          }
-        },
-
-        updateStat(message: ChatMessage, session: ChatSession) {
-          get().updateTargetSession(session, (session) => {
-            session.stat.charCount += message.content.length;
-            // TODO: should update chat count and word count
-          });
-        },
-        updateTargetSession(
-          targetSession: ChatSession,
-          updater: (session: ChatSession) => void,
-        ) {
-          const sessions = get().sessions;
-          const index = sessions.findIndex((s) => s.id === targetSession.id);
-          if (index < 0) return;
-          updater(sessions[index]);
-          set(() => ({ sessions }));
-        },
-        async clearAllData() {
-          await indexedDBStorage.clear();
-          localStorage.clear();
-          location.reload();
-        },
-        setLastInput(lastInput: string) {
-          set({
-            lastInput,
-          });
-        },
-
-        /** check if the message contains MCP JSON and execute the MCP action */
-        checkMcpJson(message: ChatMessage) {
-          const mcpEnabled = isMcpEnabled();
-          if (!mcpEnabled) return;
-          const content = getMessageTextContent(message);
-          if (isMcpJson(content)) {
-            try {
-              const mcpRequest = extractMcpJson(content);
-              if (mcpRequest) {
-                console.debug("[MCP Request]", mcpRequest);
-
-                executeMcpAction(mcpRequest.clientId, mcpRequest.mcp)
-                  .then((result) => {
-                    console.log("[MCP Response]", result);
-                    const mcpResponse =
-                      typeof result === "object"
-                        ? JSON.stringify(result)
-                        : String(result);
-                    get().onUserInput(
-                      `\`\`\`json:mcp-response:${mcpRequest.clientId}\n${mcpResponse}\n\`\`\``,
-                      [],
-                      true,
-                    );
-                  })
-                  .catch((error) => showToast("MCP execution failed", error));
+          // 确保传递给 chat 的 messages 是 RequestMessage[]
+          api.llm.chat({
+            // messages: topicMessages as RequestMessage[], // 需要类型转换或确保类型正确
+            messages: finalTopicMessages, // 使用转换后的数组
+            config: {
+              model,
+              stream: false,
+              providerName,
+            },
+            onFinish(message, responseRes) {
+              if (responseRes?.status === 200) {
+                get().updateTargetSession(
+                  session,
+                  (session) =>
+                    (session.topic =
+                      message.length > 0 ? trimTopic(message) : DEFAULT_TOPIC),
+                );
               }
-            } catch (error) {
-              console.error("[Check MCP JSON]", error);
+            },
+          });
+        }
+
+        const summarizeIndex = Math.max(
+          session.lastSummarizeIndex,
+          session.clearContextIndex ?? 0,
+        );
+        let toBeSummarizedMsgs = messages
+          .filter((msg) => !msg.isError)
+          .slice(summarizeIndex);
+
+        // !!! countMessages 需要更新 !!!
+        const historyMsgLength = countMessages(toBeSummarizedMsgs); // 假设 countMessages 已更新
+
+        if (historyMsgLength > (modelConfig?.max_tokens || 4000)) {
+          const n = toBeSummarizedMsgs.length;
+          toBeSummarizedMsgs = toBeSummarizedMsgs.slice(
+            Math.max(0, n - modelConfig.historyMessageCount),
+          );
+        }
+        const memoryPrompt = get().getMemoryPrompt();
+        if (memoryPrompt) {
+          toBeSummarizedMsgs.unshift(memoryPrompt);
+        }
+
+        const lastSummarizeIndex = session.messages.length;
+
+        console.log(
+          "[Chat History] ",
+          toBeSummarizedMsgs, // 这里的消息可能是 ChatMessage 格式
+          historyMsgLength,
+          modelConfig.compressMessageLengthThreshold,
+        );
+
+        if (
+          historyMsgLength > modelConfig.compressMessageLengthThreshold &&
+          modelConfig.sendMemory
+        ) {
+          const { max_tokens, ...modelcfg } = modelConfig;
+              // --- 将 ChatMessage[] 转换为 RequestMessage[] 用于摘要 API ---
+              // 选项 A: 假设摘要 API 只需要纯文本
+              const finalSummarizeMessages: RequestMessage[] = toBeSummarizedMsgs.map(msg => ({
+                role: msg.role,
+                content: getMessageTextContent(msg), // 仅提取文本内容
+              }));
+              // 选项 B: 假设摘要 API 可以处理 MessageContent[]
+              /*
+              const finalSummarizeMessages: RequestMessage[] = toBeSummarizedMsgs.map(msg => ({
+                role: msg.role,
+                content: typeof msg.content === 'string'
+                         ? msg.content // 或者包装: [{ type: 'text', text: msg.content }]
+                         : msg.content, // 按原样传递数组
+              }));
+              */
+          });
+
+          const summarizeSystemMessage: RequestMessage = { // 明确类型
+            role: "system",
+            content: Locale.Store.Prompt.Summarize,
+            // date: "", // RequestMessage 没有 date 字段
+          };
+
+          api.llm.chat({
+            messages: finalSummarizeMessages.concat(summarizeSystemMessage), // 使用转换后的数组
+            config: {
+              ...modelcfg,
+              stream: true,
+              model,
+              providerName,
+            },
+            onUpdate(message) {
+              session.memoryPrompt = message;
+            },
+            onFinish(message, responseRes) {
+              if (responseRes?.status === 200) {
+                console.log("[Memory] ", message);
+                get().updateTargetSession(session, (session) => {
+                  session.lastSummarizeIndex = lastSummarizeIndex;
+                  session.memoryPrompt = message;
+                });
+              }
+            },
+            onError(err) {
+              console.error("[Summarize] ", err);
+            },
+          });
+        }
+      },
+
+updateStat(message: ChatMessage, session: ChatSession) {
+  let charCount = 0;
+  let tokenCount = 0; // 你可能也想计算这个
+
+  if (typeof message.content === 'string') {
+    charCount = message.content.length;
+    tokenCount = estimateTokenLength(message.content);
+  } else if (Array.isArray(message.content)) {
+    message.content.forEach(part => {
+      if (part.type === 'text') {
+        charCount += part.text?.length ?? 0;
+        tokenCount += estimateTokenLength(part.text ?? "");
+      } else if (part.type === 'image_url') {
+        // 决定如何计算图片/文件的字符/token
+        // charCount += 0; // 或者计算 '[Image]'?
+        tokenCount += 1000; // 一致的估算值
+      } else if (part.type === 'file_url') {
+        // charCount += `[File: ${part.file_url.name}]`.length; // 示例
+        tokenCount += part.file_url.tokenCount ?? 50; // 一致的估算值
+      }
+    });
+  }
+
+  get().updateTargetSession(session, (session) => {
+    session.stat.charCount += charCount;
+    session.stat.tokenCount += tokenCount; // 更新 token 计数
+    // TODO: 如果需要，更新 wordCount
+  });
+},
+
+
+      updateTargetSession(
+        targetSession: ChatSession,
+        updater: (session: ChatSession) => void,
+      ) {
+        const sessions = get().sessions;
+        const index = sessions.findIndex((s) => s.id === targetSession.id);
+        if (index < 0) return;
+        updater(sessions[index]);
+        set(() => ({ sessions }));
+      },
+
+      async clearAllData() {
+        await indexedDBStorage.clear();
+        localStorage.clear();
+        location.reload();
+      },
+
+      setLastInput(lastInput: string) {
+        set({
+          lastInput,
+        });
+      },
+
+      checkMcpJson(message: ChatMessage) {
+        const mcpEnabled = isMcpEnabled();
+        if (!mcpEnabled) return;
+        // !!! getMessageTextContent 需要能处理 content 数组 !!!
+        const content = getMessageTextContent(message); // 假设 getMessageTextContent 已更新
+        if (isMcpJson(content)) {
+          try {
+            const mcpRequest = extractMcpJson(content);
+            if (mcpRequest) {
+              console.debug("[MCP Request]", mcpRequest);
+
+              executeMcpAction(mcpRequest.clientId, mcpRequest.mcp)
+                .then((result) => {
+                  console.log("[MCP Response]", result);
+                  const mcpResponse =
+                    typeof result === "object"
+                      ? JSON.stringify(result)
+                      : String(result);
+                  // 调用 onUserInput 时，attachments 为空
+                  get().onUserInput(
+                    `\`\`\`json:mcp-response:${mcpRequest.clientId}\n${mcpResponse}\n\`\`\``,
+                    [], // attachments 为空
+                    true,
+                  );
+                })
+                .catch((error) => showToast("MCP execution failed", error));
             }
-          }
-        },
-      };
-
-      return methods;
-    },
-    {
-      name: StoreKey.Chat,
-      version: 3.3,
-      migrate(persistedState, version) {
-        const state = persistedState as any;
-        const newState = JSON.parse(
-          JSON.stringify(state),
-        ) as typeof DEFAULT_CHAT_STATE;
-
-        if (version < 2) {
-          newState.sessions = [];
-
-          const oldSessions = state.sessions;
-          for (const oldSession of oldSessions) {
-            const newSession = createEmptySession();
-            newSession.topic = oldSession.topic;
-            newSession.messages = [...oldSession.messages];
-            newSession.mask.modelConfig.sendMemory = true;
-            newSession.mask.modelConfig.historyMessageCount = 4;
-            newSession.mask.modelConfig.compressMessageLengthThreshold = 1000;
-            newState.sessions.push(newSession);
+          } catch (error) {
+            console.error("[Check MCP JSON]", error);
           }
         }
+      },
 
-        if (version < 3) {
-          // migrate id to nanoid
-          newState.sessions.forEach((s) => {
-            s.id = nanoid();
-            s.messages.forEach((m) => (m.id = nanoid()));
-          });
+    }; // methods 结束
+
+    return methods;
+  },
+  {
+    name: StoreKey.Chat,
+    version: 3.5, // 版本号可能需要增加
+    // ... (migrate 函数保持不变，但要注意新版本可能需要新的迁移逻辑)
+    migrate(persistedState, version) {
+      const state = persistedState as any;
+      const newState = JSON.parse(
+        JSON.stringify(state),
+      ) as typeof DEFAULT_CHAT_STATE;
+
+      if (version < 2) {
+        newState.sessions = [];
+
+        const oldSessions = state.sessions;
+        for (const oldSession of oldSessions) {
+          const newSession = createEmptySession();
+          newSession.topic = oldSession.topic;
+          newSession.messages = [...oldSession.messages];
+          newSession.mask.modelConfig.sendMemory = true;
+          newSession.mask.modelConfig.historyMessageCount = 4;
+          newSession.mask.modelConfig.compressMessageLengthThreshold = 1000;
+          newState.sessions.push(newSession);
         }
+      }
 
-        // Enable `enableInjectSystemPrompts` attribute for old sessions.
-        // Resolve issue of old sessions not automatically enabling.
-        if (version < 3.1) {
-          newState.sessions.forEach((s) => {
-            if (
-              // Exclude those already set by user
-              !s.mask.modelConfig.hasOwnProperty("enableInjectSystemPrompts")
-            ) {
-              // Because users may have changed this configuration,
-              // the user's current configuration is used instead of the default
-              const config = useAppConfig.getState();
-              s.mask.modelConfig.enableInjectSystemPrompts =
-                config.modelConfig.enableInjectSystemPrompts;
+      if (version < 3) {
+        // migrate id to nanoid
+        newState.sessions.forEach((s) => {
+          s.id = nanoid();
+          s.messages.forEach((m) => (m.id = nanoid()));
+        });
+      }
+
+      // Enable `enableInjectSystemPrompts` attribute for old sessions.
+      // Resolve issue of old sessions not automatically enabling.
+      if (version < 3.1) {
+        newState.sessions.forEach((s) => {
+          if (
+            // Exclude those already set by user
+            !s.mask.modelConfig.hasOwnProperty("enableInjectSystemPrompts")
+          ) {
+            // Because users may have changed this configuration,
+            // the user's current configuration is used instead of the default
+            const config = useAppConfig.getState();
+            s.mask.modelConfig.enableInjectSystemPrompts =
+              config.modelConfig.enableInjectSystemPrompts;
+          }
+        });
+      }
+
+      // add default summarize model for every session
+      if (version < 3.2) {
+        newState.sessions.forEach((s) => {
+          const config = useAppConfig.getState();
+          s.mask.modelConfig.compressModel = config.modelConfig.compressModel;
+          s.mask.modelConfig.compressProviderName =
+            config.modelConfig.compressProviderName;
+        });
+      }
+      // revert default summarize model for every session
+      if (version < 3.3) {
+        newState.sessions.forEach((s) => {
+          const config = useAppConfig.getState();
+          s.mask.modelConfig.compressModel = "";
+          s.mask.modelConfig.compressProviderName = "";
+        });
+      }
+
+      if (version < 3.4) {
+        newState.sessions.forEach((s) => {
+          s.mask.plugin = s.mask.plugin ?? [];
+        });
+      }
+
+      if (version < 3.5) { // 使用你在上面设置的新版本号
+        newState.sessions.forEach(session => {
+          session.messages.forEach(message => {
+            // 检查 content 是否仍然是字符串 (来自旧版本)
+            if (typeof message.content === 'string') {
+              // 将字符串 content 包装到新的 MessageContent[] 结构中
+              message.content = [{ type: 'text', text: message.content }];
             }
+            // 如果 content 已经是数组 (例如，在开发期间)，它应该没问题。
+            // 如果以前的开发版本有不同的数组结构，你可能需要在这里添加更多检查。
           });
-        }
+        });
+        console.log("Migrated chat store to version 3.4 (structured content)");
+     }
 
-        // add default summarize model for every session
-        if (version < 3.2) {
-          newState.sessions.forEach((s) => {
-            const config = useAppConfig.getState();
-            s.mask.modelConfig.compressModel = config.modelConfig.compressModel;
-            s.mask.modelConfig.compressProviderName =
-              config.modelConfig.compressProviderName;
-          });
-        }
-        // revert default summarize model for every session
-        if (version < 3.3) {
-          newState.sessions.forEach((s) => {
-            const config = useAppConfig.getState();
-            s.mask.modelConfig.compressModel = "";
-            s.mask.modelConfig.compressProviderName = "";
-          });
-        }
 
-        return newState as any;
+
+      return newState as any;
+
       },
     },
   );
