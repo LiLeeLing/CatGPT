@@ -48,6 +48,7 @@ import PluginIcon from "../icons/plugin.svg";
 import ShortcutkeyIcon from "../icons/shortcutkey.svg";
 import McpToolIcon from "../icons/tool.svg";
 import HeadphoneIcon from "../icons/headphone.svg";
+import UploadDocIcon from "../icons/upload-doc.svg";
 import {
   BOT_HELLO,
   ChatMessage,
@@ -66,6 +67,7 @@ import {
   autoGrowTextArea,
   copyToClipboard,
   getMessageImages,
+  getMessageFiles,
   getMessageTextContent,
   isDalle3,
   isVisionModel,
@@ -75,9 +77,13 @@ import {
   useMobileScreen,
   selectOrCopy,
   showPlugins,
+  countTokens,
 } from "../utils";
 
+import type { UploadFile } from "../client/api";
+
 import { uploadImage as uploadImageRemote } from "@/app/utils/chat";
+import { uploadImage as uploadFileRemote } from "@/app/utils/chat";
 
 import dynamic from "next/dynamic";
 
@@ -99,6 +105,8 @@ import {
   showToast,
 } from "./ui-lib";
 import { useNavigate } from "react-router-dom";
+import { FileIcon, defaultStyles } from "react-file-icon";
+import type { DefaultExtensionType } from "react-file-icon";
 import {
   CHAT_PAGE_SIZE,
   DEFAULT_TTS_ENGINE,
@@ -118,7 +126,7 @@ import { getClientConfig } from "../config/client";
 import { useAllModels } from "../utils/hooks";
 import { ClientApi, MultimodalContent } from "../client/api";
 import { createTTSPlayer } from "../utils/audio";
-import { MsEdgeTTS, OUTPUT_FORMAT, ProsodyOptions} from "../utils/ms_edge_tts";
+import { MsEdgeTTS, OUTPUT_FORMAT } from "../utils/ms_edge_tts";
 
 import { isEmpty } from "lodash-es";
 import { getModelProvider } from "../utils/model";
@@ -492,8 +500,10 @@ function useScrollToBottom(
 }
 
 export function ChatActions(props: {
+  uploadDocument: () => void;
   uploadImage: () => void;
   setAttachImages: (images: string[]) => void;
+  setAttachFiles: (files: UploadFile[]) => void;
   setUploading: (uploading: boolean) => void;
   showPromptModal: () => void;
   scrollToBottom: () => void;
@@ -621,28 +631,33 @@ export function ChatActions(props: {
           />
         )}
 
-        {showUploadImage && (
-          <ChatAction
-            onClick={props.uploadImage}
-            text={Locale.Chat.InputActions.UploadImage}
-            icon={props.uploading ? <LoadingButtonIcon /> : <ImageIcon />}
-          />
-        )}
+      {showUploadImage && (
         <ChatAction
-          onClick={nextTheme}
-          text={Locale.Chat.InputActions.Theme[theme]}
-          icon={
-            <>
-              {theme === Theme.Auto ? (
-                <AutoIcon />
-              ) : theme === Theme.Light ? (
-                <LightIcon />
-              ) : theme === Theme.Dark ? (
-                <DarkIcon />
-              ) : null}
-            </>
-          }
+          onClick={props.uploadImage}
+          text={Locale.Chat.InputActions.UploadImage}
+          icon={props.uploading ? <LoadingButtonIcon /> : <ImageIcon />}
         />
+      )}
+      <ChatAction
+        onClick={props.uploadDocument}
+        text={"Upload Plain Text File"}
+        icon={props.uploading ? <LoadingButtonIcon /> : <UploadDocIcon />}
+      />
+      <ChatAction
+        onClick={nextTheme}
+        text={Locale.Chat.InputActions.Theme[theme]}
+        icon={
+          <>
+            {theme === Theme.Auto ? (
+              <AutoIcon />
+            ) : theme === Theme.Light ? (
+              <LightIcon />
+            ) : theme === Theme.Dark ? (
+              <DarkIcon />
+            ) : null}
+          </>
+        }
+      />
 
         <ChatAction
           onClick={props.showPromptHints}
@@ -1032,6 +1047,7 @@ function _Chat() {
   const isMobileScreen = useMobileScreen();
   const navigate = useNavigate();
   const [attachImages, setAttachImages] = useState<string[]>([]);
+  const [attachFiles, setAttachFiles] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
 
   // prompt hints
@@ -1113,9 +1129,10 @@ function _Chat() {
     }
     setIsLoading(true);
     chatStore
-      .onUserInput(userInput, attachImages)
+      .onUserInput(userInput, attachImages, undefined, attachFiles)
       .then(() => setIsLoading(false));
     setAttachImages([]);
+    setAttachFiles([]);
     chatStore.setLastInput(userInput);
     setUserInput("");
     setPromptHints([]);
@@ -1266,7 +1283,9 @@ function _Chat() {
     setIsLoading(true);
     const textContent = getMessageTextContent(userMessage);
     const images = getMessageImages(userMessage);
-    chatStore.onUserInput(textContent, images).then(() => setIsLoading(false));
+    chatStore
+      .onUserInput(textContent, images, undefined, attachFiles)
+      .then(() => setIsLoading(false));
     inputRef.current?.focus();
   };
 
@@ -1300,48 +1319,13 @@ function _Chat() {
       let audioBuffer: ArrayBuffer;
       const { markdownToTxt } = require("markdown-to-txt");
       const textContent = markdownToTxt(text);
-      try { // 使用 try...catch...finally 处理错误和加载状态
-        // --- Edge TTS 分支 ---
-        if (config.ttsConfig.engine === "Edge-TTS") { // <--- 明确检查 Edge-TTS 引擎
-          const edgeVoiceName = config.ttsConfig.edgeTTSVoiceName;
-          const edgePitch = config.ttsConfig.edgeTTSPitch; // <--- 获取音调设置
-          const edgeSpeed = config.ttsConfig.speed; // <--- 获取语速设置
-
-          const tts = new MsEdgeTTS();
-          try { // 嵌套 try...finally 确保 tts.close() 被调用
-            await tts.setMetadata(
-              edgeVoiceName,
-              OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, // 或者你选择的格式
-            );
-
-            // 创建 ProsodyOptions 对象
-            const prosodyOptions: ProsodyOptions = {
-              rate: edgeSpeed, // <--- 传递语速
-              pitch: edgePitch, // <--- 传递音调
-            };
-
-            // 调用 toArrayBuffer 并传递 prosodyOptions
-            audioBuffer = await tts.toArrayBuffer(textContent, prosodyOptions); // <--- 修改这里
-
-          } finally {
-            tts.close(); // 确保 WebSocket 连接被关闭
-          }
-        }
-        // --- OpenAI TTS 分支 ---
-        else if (config.ttsConfig.engine === DEFAULT_TTS_ENGINE) { // <--- 明确检查 OpenAI TTS 引擎
-          const api: ClientApi = new ClientApi(ModelProvider.GPT); // 假设 ClientApi 可以这样用
-          audioBuffer = await api.llm.speech({
-            model: config.ttsConfig.model,
-            input: textContent,
-            voice: config.ttsConfig.voice,
-            speed: config.ttsConfig.speed, // OpenAI TTS 使用 speed 参数
-          });
-        }
-        // --- 其他引擎 (如果未来添加) ---
-        else {
-          console.warn("Unsupported TTS engine:", config.ttsConfig.engine);
-          // 可以选择在这里添加对其他引擎的支持或显示错误
-        }
+      if (config.ttsConfig.engine !== DEFAULT_TTS_ENGINE) {
+        const edgeVoiceName = accessStore.edgeVoiceName();
+        const tts = new MsEdgeTTS();
+        await tts.setMetadata(
+          edgeVoiceName,
+          OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3,
+        );
         audioBuffer = await tts.toArrayBuffer(textContent);
       } else {
         audioBuffer = await api.llm.speech({
@@ -1586,6 +1570,54 @@ function _Chat() {
     },
     [attachImages, chatStore],
   );
+
+  async function uploadDocument() {
+    const files: UploadFile[] = [];
+    files.push(...attachFiles);
+
+    files.push(
+      ...(await new Promise<UploadFile[]>((res, rej) => {
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "text/*";
+        fileInput.multiple = true;
+        fileInput.onchange = (event: any) => {
+          setUploading(true);
+          const inputFiles = event.target.files;
+          const imagesData: UploadFile[] = [];
+          (async () => {
+            for (let i = 0; i < inputFiles.length; i++) {
+              const file = inputFiles[i];
+              try {
+                const dataUrl = await uploadFileRemote(file);
+                const fileData: UploadFile = { name: file.name, url: dataUrl };
+                const tokenCount: number = await countTokens(fileData);
+                fileData.tokenCount = tokenCount;
+                imagesData.push(fileData);
+                if (
+                  imagesData.length === 3 ||
+                  imagesData.length === inputFiles.length
+                ) {
+                  setUploading(false);
+                  res(imagesData);
+                }
+              } catch (e) {
+                setUploading(false);
+                rej(e);
+              }
+            }
+          })();
+        };
+        fileInput.click();
+      })),
+    );
+
+    const filesLength = files.length;
+    if (filesLength > 3) {
+      files.splice(3, filesLength - 3);
+    }
+    setAttachFiles(files);
+  }
 
   async function uploadImage() {
     const images: string[] = [];
@@ -2055,7 +2087,42 @@ function _Chat() {
                                 )}
                               </div>
                             )}
-                          </div>
+                            {getMessageFiles(message).length > 0 && (
+                      <div className={styles["chat-message-item-files"]}>
+                        {getMessageFiles(message).map((file, index) => {
+                          const extension: DefaultExtensionType = file.name
+                            .split(".")
+                            .pop()
+                            ?.toLowerCase() as DefaultExtensionType;
+                          const style = defaultStyles[extension];
+                          return (
+                            <a
+                              href={file.url}
+                              target="_blank"
+                              key={index}
+                              className={styles["chat-message-item-file"]}
+                            >
+                              <div
+                                className={
+                                  styles["chat-message-item-file-icon"] +
+                                  " no-dark"
+                                }
+                              >
+                                <FileIcon {...style} glyphColor="#303030" />
+                              </div>
+                              <div
+                                className={
+                                  styles["chat-message-item-file-name"]
+                                }
+                              >
+                                {file.name} {file.tokenCount}K
+                              </div>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                           {message?.audio_url && (
                             <div className={styles["chat-message-audio"]}>
                               <audio src={message.audio_url} controls />
@@ -2081,9 +2148,11 @@ function _Chat() {
               />
 
               <ChatActions
+                uploadDocument={uploadDocument}
                 uploadImage={uploadImage}
                 setAttachImages={setAttachImages}
-                setUploading={setUploading}
+                setAttachFiles={setAttachFiles}
+          setUploading={setUploading}
                 showPromptModal={() => setShowPromptModal(true)}
                 scrollToBottom={scrollToBottom}
                 hitBottom={hitBottom}
@@ -2106,7 +2175,7 @@ function _Chat() {
               <label
                 className={clsx(styles["chat-input-panel-inner"], {
                   [styles["chat-input-panel-inner-attach"]]:
-                    attachImages.length !== 0,
+                    attachImages.length !== 0 || attachFiles.length != 0,
                 })}
                 htmlFor="chat-input"
               >
@@ -2151,6 +2220,59 @@ function _Chat() {
                     })}
                   </div>
                 )}
+            {/* 文件预览块开始 */}
+            {attachFiles.length > 0 && (
+              <div className={styles["attach-files"]}>
+                {attachFiles.map((file, index) => {
+                  // 获取文件扩展名用于图标
+                  const extension = file.name
+                    .split(".")
+                    .pop()
+                    ?.toLowerCase() as DefaultExtensionType | undefined;
+                  // 获取对应图标样式，如果扩展名无效则使用默认样式或不显示图标
+                  const iconStyle = extension ? defaultStyles[extension] : undefined;
+
+                  return (
+                    <div key={index} className={styles["attach-file"]}>
+                      <div className={styles["attach-file-icon"] + " no-dark"}>
+                        {/* 使用 react-file-icon 显示图标 */}
+                        {iconStyle ? (
+                          <FileIcon {...iconStyle} glyphColor="#303030" />
+                        ) : (
+                          // 可以放一个通用文件图标作为备用
+                          <span>📄</span>
+                        )}
+                      </div>
+                      <div className={styles["attach-file-info"]}>
+                        <span className={styles["attach-file-name"]} title={file.name}>
+                          {file.name}
+                        </span>
+                        {/* 可选：显示 Token 数量 */}
+                        {file.tokenCount !== undefined && (
+                          <span className={styles["attach-file-tokens"]}>
+                            ({file.tokenCount}K)
+                          </span>
+                        )}
+                      </div>
+                      {/* 添加删除按钮 */}
+                      <div className={styles["attach-file-delete"]}>
+                        <IconButton
+                          icon={<DeleteIcon />}
+                          onClick={() => {
+                            setAttachFiles(
+                              attachFiles.filter((_, i) => i !== index)
+                            );
+                          }}
+                          bordered={false} // 或者根据你的样式调整
+                          title={Locale.Chat.Actions.Delete}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* 文件预览块结束 */}
                 <IconButton
                   icon={<SendWhiteIcon />}
                   text={Locale.Chat.Send}

@@ -247,19 +247,18 @@ export const useAppConfig = createPersistStore(
       return { ...currentState, ...state, models: models };
     },
 
-    if (!state.ttsConfig?.hasOwnProperty('edgeTTSPitch')) {
-      mergedTtsConfig.edgeTTSPitch = DEFAULT_CONFIG.ttsConfig.edgeTTSPitch;
-  }
-
-  return {
-    ...currentState,
-    ...state,
-    models: models,
-    ttsConfig: mergedTtsConfig, // 使用合并后的 ttsConfig
-};
-},
-
-    migrate(persistedState, version) {
+    afterMerge(persistedState, currentState) {
+      const state = persistedState as ChatConfig | undefined;
+      const mergedTtsConfig = { ...currentState.ttsConfig, ...(state?.ttsConfig || {}) };
+      if (!state?.ttsConfig?.hasOwnProperty('edgeTTSPitch')) {
+        mergedTtsConfig.edgeTTSPitch = DEFAULT_CONFIG.ttsConfig.edgeTTSPitch;
+      }
+      return {
+        ...currentState,
+        ttsConfig: mergedTtsConfig, // 使用合并后的 ttsConfig
+      };
+    },
+      migrate(persistedState, version) {
       const state = persistedState as ChatConfig;
 
       if (version < 3.4) {
