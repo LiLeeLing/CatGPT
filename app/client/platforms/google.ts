@@ -107,6 +107,28 @@ export class GeminiProApi implements LLMApi {
           parts = parts.concat(
             images.map((image) => {
               const imageType = image.split(";")[0].split(":")[1];
+      const files = getMessageFiles(v); // 使用你新增的辅助函数
+
+      // 处理文件：转换为文本提示
+      if (files.length > 0) {
+        const fileText = files.map(f => `[File attached: ${f.name}]`).join("\n");
+        // 将文件提示添加到文本部分
+        const existingTextPart = parts.find(p => p.text !== undefined);
+        if (existingTextPart) {
+          existingTextPart.text += "\n" + fileText;
+        } else {
+          parts.push({ text: fileText });
+        }
+      }
+
+      // 处理图片 (保持原有逻辑)
+      if (isVisionModel(options.config.model)) {
+        const images = getMessageImages(v);
+        if (images.length > 0) {
+          multimodal = true;
+          parts = parts.concat(
+            images.map((image) => {
+              const imageType = image.split(";")[0].split(":")[1];
               const imageData = image.split(",")[1];
               return {
                 inline_data: {
@@ -118,13 +140,16 @@ export class GeminiProApi implements LLMApi {
           );
         }
       }
-      return {
-        role: v.role.replace("assistant", "model").replace("system", "user"),
-        parts: parts,
-      };
-    });
+      // 过滤掉可能存在的空文本部分
+      parts = parts.filter(part => !(part.text !== undefined && part.text.trim() === ""));
+    } // <--- 这是 v.role.replace(...) 之前的 '}'
+    return {
+      role: v.role.replace("assistant", "model").replace("system", "user"),
+      parts: parts,
+    };
+  });
 
-    // google requires that role in neighboring messages must not be the same
+              // google requires that role in neighboring messages must not be the same
     for (let i = 0; i < messages.length - 1; ) {
       // Check if current and next item both have the role "model"
       if (messages[i].role === messages[i + 1].role) {

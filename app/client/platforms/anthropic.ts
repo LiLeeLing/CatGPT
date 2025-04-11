@@ -164,13 +164,73 @@ export class ClaudeApi implements LLMApi {
                 type: "image" as const,
                 source: {
                   type: encodeType,
-                  media_type: mimeType,
-                  data,
-                },
-              };
-            }),
-        };
-      });
+        .map(({ type, text, image_url, file_url }) => { // 添加 file_url 到解构
+          if (type === "text") {
+            return {
+              type,
+              text: text!,
+            };
+          }
+          if (type === "image_url" && image_url) { // 检查 image_url 是否存在
+            const { url = "" } = image_url;
+            const colonIndex = url.indexOf(":");
+            const semicolonIndex = url.indexOf(";");
+            const comma = url.indexOf(",");
+
+            // 基本的 URL 格式检查
+            if (colonIndex < 0 || semicolonIndex < 0 || comma < 0 || semicolonIndex <= colonIndex || comma <= semicolonIndex) {
+               console.warn(`[Anthropic] Invalid image data URL format: ${url}. Skipping.`);
+               return null; // 或者返回一个表示错误的文本块
+            }
+
+            const mimeType = url.slice(colonIndex + 1, semicolonIndex);
+            const encodeType = url.slice(semicolonIndex + 1, comma);
+            const data = url.slice(comma + 1);
+
+            return {
+              type: "image" as const,
+              source: {
+                type: encodeType,
+                media_type: mimeType,
+                data,
+              },
+            };
+          }
+          if (type === "file_url" && file_url) { // 处理 file_url
+            // 转换为文本提示
+            return {
+              type: "text" as const,
+              text: `[File attached: ${file_url.name}]`,
+            };
+          }
+          return null; // 忽略无法处理的类型
+        }).filter(part => part !== null) // 过滤掉 null (无效图片URL或未知类型)
+    };
+  });
+
+// 合并连续的文本块 (Anthropic API 要求)
+prompt.forEach(message => {
+  if (Array.isArray(message.content)) {
+    const mergedContent: MultiBlockContent[] = [];
+    let currentText = "";
+    message.content.forEach(part => {
+      if (part.type === "text" && part.text) {
+        currentText += (currentText ? "\n" : "") + part.text;
+      } else {
+        if (currentText) {
+          mergedContent.push({ type: "text", text: currentText });
+          currentText = "";
+        }
+        mergedContent.push(part); // 添加非文本部分 (如图片)
+      }
+    });
+    if (currentText) {
+      mergedContent.push({ type: "text", text: currentText });
+    }
+    message.content = mergedContent;
+  }
+});
+
 
     if (prompt[0]?.role === "assistant") {
       prompt.unshift({

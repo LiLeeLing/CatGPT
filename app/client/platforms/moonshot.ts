@@ -64,26 +64,80 @@ export class MoonshotApi implements LLMApi {
     throw new Error("Method not implemented.");
   }
 
-  async chat(options: ChatOptions) {
-    const messages: ChatOptions["messages"] = [];
-    for (const v of options.messages) {
-      const content = getMessageTextContent(v);
-      messages.push({ role: v.role, content });
-    }
+    async chat(options: ChatOptions) {
+      // --- 开始: 通用修改逻辑 (适配 Moonshot) ---
+      const processedMessages: ChatOptions["messages"] = [];
+      for (const v of options.messages) {
+        let processedContent: string | MultimodalContent[];
+        const modelConfig = { ...useAppConfig.getState().modelConfig, ...useChatStore.getState().currentSession().mask.modelConfig, ...{ model: options.config.model } };
+        const visionModel = isVisionModel(modelConfig.model); // Moonshot 可能没有 vision 模型
 
-    const modelConfig = {
-      ...useAppConfig.getState().modelConfig,
-      ...useChatStore.getState().currentSession().mask.modelConfig,
-      ...{
-        model: options.config.model,
-        providerName: options.config.providerName,
-      },
-    };
+        if (typeof v.content === 'string') {
+          processedContent = (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function')
+            ? getMessageTextContentWithoutThinking(v)
+            : v.content;
+        } else {
+          const tempContent: MultimodalContent[] = [];
+          let fileText = "";
 
-    const requestPayload: RequestPayload = {
-      messages,
-      stream: options.config.stream,
-      model: modelConfig.model,
+          for (const part of v.content) {
+            if (part.type === 'text') {
+              tempContent.push(part);
+            } else if (part.type === 'image_url') {
+              // Moonshot API 格式未知，暂时忽略图片
+              // if (visionModel) { tempContent.push(part); }
+            } else if (part.type === 'file_url' && part.file_url) {
+              fileText += (fileText ? "\n" : "") + `[File attached: ${part.file_url.name}]`;
+            }
+          }
+
+          if (fileText) {
+            const lastTextPart = tempContent.slice().reverse().find(p => p.type === 'text') as TextContent | undefined;
+            if (lastTextPart) {
+              lastTextPart.text = (lastTextPart.text ?? "") + "\n" + fileText;
+            } else {
+              tempContent.push({ type: 'text', text: fileText });
+            }
+          }
+
+          const filteredContent = tempContent.filter(p => !(p.type === 'text' && !(p.text ?? "").trim()));
+
+          if (filteredContent.every(p => p.type === 'text')) {
+            processedContent = filteredContent.map(p => p.text ?? "").join("\n");
+          } else if (filteredContent.length > 0) {
+            // Moonshot API 可能只接受字符串
+            processedContent = filteredContent.map(p => p.text ?? "").join("\n"); // 强制转字符串
+          } else {
+            processedContent = getMessageTextContent(v);
+          }
+
+           if (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function') {
+               if (typeof processedContent === 'string') {
+                   processedContent = getMessageTextContentWithoutThinking({ role: v.role, content: processedContent });
+               } // 数组情况已处理为字符串
+           }
+        }
+
+        const content = processedContent;
+        // 确保 content 是字符串
+        processedMessages.push({ role: v.role, content: typeof content === 'string' ? content : getMessageTextContent(v) });
+      }
+      // --- 结束: 通用修改逻辑 ---
+
+      const modelConfig = {
+        ...useAppConfig.getState().modelConfig,
+        ...useChatStore.getState().currentSession().mask.modelConfig,
+        ...{
+          model: options.config.model,
+          providerName: options.config.providerName,
+        },
+      };
+
+      const requestPayload: RequestPayload = {
+        messages: processedMessages, // 使用处理后的 messages
+        stream: options.config.stream,
+        model: modelConfig.model,
+  
       temperature: modelConfig.temperature,
       presence_penalty: modelConfig.presence_penalty,
       frequency_penalty: modelConfig.frequency_penalty,

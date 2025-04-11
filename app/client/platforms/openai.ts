@@ -221,10 +221,65 @@ export class ChatGPTApi implements LLMApi {
           ? await preProcessImageContent(v.content)
           : getMessageTextContent(v);
         if (!(isO1OrO3 && v.role === "system"))
-          messages.push({ role: v.role, content });
+    let processedContent: string | MultimodalContent[];
+
+    if (typeof v.content === 'string') {
+      processedContent = v.content; // 保持字符串不变
+    } else {
+      const tempContent: MultimodalContent[] = [];
+      let fileText = ""; // 用于收集文件提示
+
+      for (const part of v.content) {
+        if (part.type === 'text') {
+          tempContent.push(part);
+        } else if (part.type === 'image_url') {
+          if (visionModel) {
+            // OpenAI API 期望 image_url 直接在数组中
+            tempContent.push(part);
+          } else {
+            // 非 Vision 模型，忽略图片或添加文本提示
+            // tempContent.push({ type: 'text', text: `[Image ignored: ${part.image_url?.url.substring(0, 30)}...]` });
+          }
+        } else if (part.type === 'file_url' && part.file_url) {
+          // 收集文件提示文本
+          fileText += (fileText ? "\n" : "") + `[File attached: ${part.file_url.name}]`;
+        }
       }
 
-      // O1 not support image, tools (plugin in ChatGPTNextWeb) and system, stream, logprobs, temperature, top_p, n, presence_penalty, frequency_penalty yet.
+      // 如果有文件提示，附加到最后一个文本部分或新增一个文本部分
+      if (fileText) {
+        const lastTextPart = tempContent.slice().reverse().find(p => p.type === 'text') as TextContent | undefined;
+        if (lastTextPart) {
+          lastTextPart.text = (lastTextPart.text ?? "") + "\n" + fileText;
+        } else {
+          tempContent.push({ type: 'text', text: fileText });
+        }
+      }
+
+      // 简化：如果处理后只剩下文本，则合并为字符串 (OpenAI API 接受)
+      if (tempContent.every(p => p.type === 'text')) {
+        processedContent = tempContent.map(p => p.text ?? "").join("\n");
+      } else if (tempContent.length > 0) {
+        processedContent = tempContent;
+      } else {
+        // 如果过滤后为空，尝试获取原始文本
+        processedContent = getMessageTextContent(v);
+      }
+    }
+
+    // 确保 preProcessImageContent (如果仍需调用) 能处理数组输入或在此之前完成
+    // 注意：preProcessImageContent 可能需要调整以处理 MultimodalContent[]
+    // 暂时假设 preProcessImageContent 在这里不再需要，因为我们直接处理数组
+    const content = processedContent;
+
+    if (!(isO1OrO3 && v.role === "system")) {
+      messages.push({ role: v.role, content });
+    }
+  }
+
+  // O1 not support image, tools (plugin in ChatGPTNextWeb) and system, stream, logprobs, temperature, top_p, n, presence_penalty, frequency_penalty yet.
+
+
       requestPayload = {
         messages,
         stream: options.config.stream,

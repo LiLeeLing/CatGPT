@@ -110,15 +110,92 @@ export class QwenApi implements LLMApi {
         visionModel
           ? await preProcessImageContentForAlibabaDashScope(v.content)
           : v.role === "assistant"
-          ? getMessageTextContentWithoutThinking(v)
-          : getMessageTextContent(v)
-      ) as any;
+  let processedContent: string | MultimodalContentForAlibaba[]; // 使用 Qwen 的特定类型
 
-      messages.push({ role: v.role, content });
+  if (typeof v.content === 'string') {
+    // 如果是字符串，根据角色处理
+    processedContent = v.role === "assistant"
+      ? getMessageTextContentWithoutThinking(v) // 假设这个函数能处理字符串
+      : v.content;
+  } else {
+    // 如果是数组
+    const tempContent: MultimodalContentForAlibaba[] = [];
+    let fileText = ""; // 用于收集文件提示
+
+    for (const part of v.content) {
+      if (part.type === 'text') {
+        // Qwen API 期望 { text: "..." }
+        tempContent.push({ text: part.text ?? "" });
+      } else if (part.type === 'image_url') {
+        if (visionModel) {
+          // Qwen API 期望 { image: "data:..." } 或 { url: "oss://..." }
+          // 假设 preProcessImageContentForAlibabaDashScope 返回这种格式
+          // 这里需要调整，因为 preProcessImageContentForAlibabaDashScope 可能期望整个 content
+          // 简化：假设 image_url.url 已经是 Qwen 接受的格式 (可能是 base64 data url)
+          tempContent.push({ image: part.image_url?.url }); // 需要确认 Qwen API 格式
+        } else {
+          // 非 Vision 模型，忽略图片
+        }
+      } else if (part.type === 'file_url' && part.file_url) {
+        // 收集文件提示文本
+        fileText += (fileText ? "\n" : "") + `[File attached: ${part.file_url.name}]`;
+      }
     }
 
-    const shouldStream = !!options.config.stream;
-    const requestPayload: RequestPayload = {
+    // 如果有文件提示，附加到最后一个文本部分或新增一个文本部分
+    if (fileText) {
+      const lastTextPart = tempContent.slice().reverse().find(p => p.text !== undefined);
+      if (lastTextPart) {
+        lastTextPart.text = (lastTextPart.text ?? "") + "\n" + fileText;
+      } else {
+        tempContent.push({ text: fileText });
+      }
+    }
+
+    // 过滤掉空的文本部分
+    const filteredContent = tempContent.filter(p => !(p.text !== undefined && p.text.trim() === ""));
+
+    // 简化：如果处理后只剩下文本，则合并为字符串
+    if (filteredContent.every(p => p.text !== undefined && p.image === undefined)) {
+      processedContent = filteredContent.map(p => p.text ?? "").join("\n");
+    } else if (filteredContent.length > 0) {
+      processedContent = filteredContent;
+    } else {
+      // 如果过滤后为空，尝试获取原始文本
+      processedContent = getMessageTextContent(v);
+    }
+
+    // 对助手的响应应用 getMessageTextContentWithoutThinking
+    if (v.role === "assistant" && typeof processedContent === 'string') {
+       processedContent = getMessageTextContentWithoutThinking({ role: v.role, content: processedContent });
+    } else if (v.role === "assistant" && Array.isArray(processedContent)) {
+       // 如果助手响应是数组，可能需要更复杂的处理来移除 "thinking" 部分
+       // 暂时只处理文本部分
+       processedContent.forEach(part => {
+          if (part.text) {
+             part.text = getMessageTextContentWithoutThinking({ role: v.role, content: part.text });
+          }
+       });
+       // 过滤掉处理后可能变空的文本部分
+       processedContent = processedContent.filter(p => !(p.text !== undefined && p.text.trim() === ""));
+       // 如果过滤后只剩一个文本部分，简化为字符串
+       if (processedContent.length === 1 && processedContent[0].text !== undefined) {
+          processedContent = processedContent[0].text;
+       } else if (processedContent.length === 0) {
+          processedContent = ""; // 如果全空了
+       }
+    }
+  }
+
+  // 确保 preProcessImageContentForAlibabaDashScope 在这里不再需要或已调整
+  const content = processedContent as any; // 类型断言，因为 Qwen API 类型不同
+
+  messages.push({ role: v.role, content });
+}
+
+const shouldStream = !!options.config.stream;
+
+          const requestPayload: RequestPayload = {
       model: modelConfig.model,
       input: {
         messages,

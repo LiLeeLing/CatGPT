@@ -64,22 +64,71 @@ export class DeepSeekApi implements LLMApi {
   }
 
   async chat(options: ChatOptions) {
-    const messages: ChatOptions["messages"] = [];
+    // --- 开始: 通用修改逻辑 (适配 DeepSeek) ---
+    const processedMessagesIntermediate: ChatOptions["messages"] = [];
     for (const v of options.messages) {
-      if (v.role === "assistant") {
-        const content = getMessageTextContentWithoutThinking(v);
-        messages.push({ role: v.role, content });
-      } else {
-        const content = getMessageTextContent(v);
-        messages.push({ role: v.role, content });
-      }
-    }
+      let processedContent: string | MultimodalContent[];
+      const modelConfig = { ...useAppConfig.getState().modelConfig, ...useChatStore.getState().currentSession().mask.modelConfig, ...{ model: options.config.model } };
+      const visionModel = isVisionModel(modelConfig.model); // DeepSeek 可能没有 vision 模型
 
+      if (typeof v.content === 'string') {
+        processedContent = (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function')
+          ? getMessageTextContentWithoutThinking(v)
+          : v.content;
+      } else {
+        const tempContent: MultimodalContent[] = [];
+        let fileText = "";
+
+        for (const part of v.content) {
+          if (part.type === 'text') {
+            tempContent.push(part);
+          } else if (part.type === 'image_url') {
+            // DeepSeek API 格式未知，暂时忽略图片
+            // if (visionModel) { tempContent.push(part); }
+          } else if (part.type === 'file_url' && part.file_url) {
+            fileText += (fileText ? "\n" : "") + `[File attached: ${part.file_url.name}]`;
+          }
+        }
+
+        if (fileText) {
+          const lastTextPart = tempContent.slice().reverse().find(p => p.type === 'text') as TextContent | undefined;
+          if (lastTextPart) {
+            lastTextPart.text = (lastTextPart.text ?? "") + "\n" + fileText;
+          } else {
+            tempContent.push({ type: 'text', text: fileText });
+          }
+        }
+
+        const filteredContent = tempContent.filter(p => !(p.type === 'text' && !(p.text ?? "").trim()));
+
+        if (filteredContent.every(p => p.type === 'text')) {
+          processedContent = filteredContent.map(p => p.text ?? "").join("\n");
+        } else if (filteredContent.length > 0) {
+          // DeepSeek API 可能只接受字符串
+          processedContent = filteredContent.map(p => p.text ?? "").join("\n"); // 强制转字符串
+        } else {
+          processedContent = getMessageTextContent(v);
+        }
+
+         if (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function') {
+             if (typeof processedContent === 'string') {
+                 processedContent = getMessageTextContentWithoutThinking({ role: v.role, content: processedContent });
+             } // 数组情况已处理为字符串
+         }
+      }
+
+      const content = processedContent;
+      // 确保 content 是字符串
+      processedMessagesIntermediate.push({ role: v.role, content: typeof content === 'string' ? content : getMessageTextContent(v) });
+    }
+    // --- 结束: 通用修改逻辑 ---
+
+    // --- DeepSeek 特定处理 ---
     // 检测并修复消息顺序，确保除system外的第一个消息是user
     const filteredMessages: ChatOptions["messages"] = [];
     let hasFoundFirstUser = false;
 
-    for (const msg of messages) {
+    for (const msg of processedMessagesIntermediate) { // 使用处理后的消息
       if (msg.role === "system") {
         // Keep all system messages
         filteredMessages.push(msg);
@@ -96,12 +145,6 @@ export class DeepSeekApi implements LLMApi {
 
     const modelConfig = {
       ...useAppConfig.getState().modelConfig,
-      ...useChatStore.getState().currentSession().mask.modelConfig,
-      ...{
-        model: options.config.model,
-        providerName: options.config.providerName,
-      },
-    };
 
     const requestPayload: RequestPayload = {
       messages: filteredMessages,
@@ -113,6 +156,7 @@ export class DeepSeekApi implements LLMApi {
       top_p: modelConfig.top_p,
       // max_tokens: Math.max(modelConfig.max_tokens, 1024),
       // Please do not ask me why not send max_tokens, no reason, this param is just shit, I dont want to explain anymore.
+    },
     };
 
     console.log("[Request] openai payload: ", requestPayload);
