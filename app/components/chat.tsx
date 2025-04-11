@@ -1134,7 +1134,7 @@ function _Chat() {
       .catch((error) => {
         setIsLoading(false);
         console.error("[Chat] Submit Error:", error);
-        showToast(Locale.Error.RequestError); // 假设 Locale.Error.RequestError 存在
+        showToast("Request failed, please try again later");
       });
     setAttachImages([]);
     setAttachFiles([]);
