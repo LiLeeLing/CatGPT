@@ -1325,7 +1325,7 @@ function _Chat() {
       const { markdownToTxt } = require("markdown-to-txt");
       const textContent = markdownToTxt(text);
       if (config.ttsConfig.engine !== DEFAULT_TTS_ENGINE) {
-        const edgeVoiceName = accessStore.edgeVoiceName();
+        const edgeVoiceName = accessStore.edgeVoiceName;
         const tts = new MsEdgeTTS();
         await tts.setMetadata(
           edgeVoiceName,
