@@ -166,7 +166,7 @@ export function TTSConfigList(props: {
                       (config) =>
                         (config.edgeTTSPitch = TTSConfigValidator.edgeTTSPitch( // 使用验证器
                           e.currentTarget.value,
-                        )),
+                        ) as PITCH), // <--- 添加类型断言 as PITCH
                     );
                   }}
                 >
