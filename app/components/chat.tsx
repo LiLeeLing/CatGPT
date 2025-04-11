@@ -118,7 +118,7 @@ import { getClientConfig } from "../config/client";
 import { useAllModels } from "../utils/hooks";
 import { ClientApi, MultimodalContent } from "../client/api";
 import { createTTSPlayer } from "../utils/audio";
-import { MsEdgeTTS, OUTPUT_FORMAT } from "../utils/ms_edge_tts";
+import { MsEdgeTTS, OUTPUT_FORMAT, ProsodyOptions} from "../utils/ms_edge_tts";
 
 import { isEmpty } from "lodash-es";
 import { getModelProvider } from "../utils/model";
@@ -1300,15 +1300,48 @@ function _Chat() {
       let audioBuffer: ArrayBuffer;
       const { markdownToTxt } = require("markdown-to-txt");
       const textContent = markdownToTxt(text);
-      if (config.ttsConfig.engine !== DEFAULT_TTS_ENGINE) {
-        //const edgeVoiceName = accessStore.edgeVoiceName();
-        const config = useAppConfig.getState(); // 确保获取到最新的 config
-        const edgeVoiceName = config.ttsConfig.edgeTTSVoiceName;
-        const tts = new MsEdgeTTS();
-        await tts.setMetadata(
-          edgeVoiceName,
-          OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3,
-        );
+      try { // 使用 try...catch...finally 处理错误和加载状态
+        // --- Edge TTS 分支 ---
+        if (config.ttsConfig.engine === "Edge-TTS") { // <--- 明确检查 Edge-TTS 引擎
+          const edgeVoiceName = config.ttsConfig.edgeTTSVoiceName;
+          const edgePitch = config.ttsConfig.edgeTTSPitch; // <--- 获取音调设置
+          const edgeSpeed = config.ttsConfig.speed; // <--- 获取语速设置
+
+          const tts = new MsEdgeTTS();
+          try { // 嵌套 try...finally 确保 tts.close() 被调用
+            await tts.setMetadata(
+              edgeVoiceName,
+              OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, // 或者你选择的格式
+            );
+
+            // 创建 ProsodyOptions 对象
+            const prosodyOptions: ProsodyOptions = {
+              rate: edgeSpeed, // <--- 传递语速
+              pitch: edgePitch, // <--- 传递音调
+            };
+
+            // 调用 toArrayBuffer 并传递 prosodyOptions
+            audioBuffer = await tts.toArrayBuffer(textContent, prosodyOptions); // <--- 修改这里
+
+          } finally {
+            tts.close(); // 确保 WebSocket 连接被关闭
+          }
+        }
+        // --- OpenAI TTS 分支 ---
+        else if (config.ttsConfig.engine === DEFAULT_TTS_ENGINE) { // <--- 明确检查 OpenAI TTS 引擎
+          const api: ClientApi = new ClientApi(ModelProvider.GPT); // 假设 ClientApi 可以这样用
+          audioBuffer = await api.llm.speech({
+            model: config.ttsConfig.model,
+            input: textContent,
+            voice: config.ttsConfig.voice,
+            speed: config.ttsConfig.speed, // OpenAI TTS 使用 speed 参数
+          });
+        }
+        // --- 其他引擎 (如果未来添加) ---
+        else {
+          console.warn("Unsupported TTS engine:", config.ttsConfig.engine);
+          // 可以选择在这里添加对其他引擎的支持或显示错误
+        }
         audioBuffer = await tts.toArrayBuffer(textContent);
       } else {
         audioBuffer = await api.llm.speech({

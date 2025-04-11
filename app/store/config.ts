@@ -17,6 +17,10 @@ import {
   ServiceProvider,
 } from "../constant";
 import { createPersistStore } from "../utils/store";
+import {
+  PITCH,
+} from "../utils/ms_edge_tts";
+
 import type { Voice } from "rt-client";
 
 export type ModelType = (typeof DEFAULT_MODELS)[number]["name"];
@@ -24,6 +28,8 @@ export type TTSModelType = (typeof DEFAULT_TTS_MODELS)[number];
 export type TTSVoiceType = (typeof DEFAULT_TTS_VOICES)[number];
 export type TTSEdgeVoiceType = (typeof DEFAULT_EDGE_TTS_VOICES)[number]; // 新增 Edge 声音类型
 export type TTSEngineType = (typeof DEFAULT_TTS_ENGINES)[number];
+export type TTSEdgePitchType = PITCH | string; // 新增: Edge TTS 音调类型
+
 
 export enum SubmitKey {
   Enter = "Enter",
@@ -92,7 +98,8 @@ export const DEFAULT_CONFIG = {
     engine: DEFAULT_TTS_ENGINE,
     model: DEFAULT_TTS_MODEL,
     voice: DEFAULT_TTS_VOICE,
-    edgeTTSVoiceName: DEFAULT_EDGE_TTS_VOICE, // 新增: Edge TTS 声音名称
+    edgeTTSVoiceName: DEFAULT_EDGE_TTS_VOICE, // Edge TTS 声音名称
+    edgeTTSPitch: PITCH.DEFAULT, // Edge TTS 音调，使用 PITCH 枚举的默认值
     speed: 1.0,
   },
 
@@ -113,7 +120,16 @@ export const DEFAULT_CONFIG = {
 export type ChatConfig = typeof DEFAULT_CONFIG;
 
 export type ModelConfig = ChatConfig["modelConfig"];
-export type TTSConfig = ChatConfig["ttsConfig"];
+export type TTSConfig = ChatConfig["ttsConfig"] & { // 可以这样写，或者直接列出所有字段
+    enable: boolean;
+    autoplay: boolean;
+    engine: TTSEngineType;
+    model: TTSModelType;
+    voice: TTSVoiceType;
+    edgeTTSVoiceName: TTSEdgeVoiceType;
+    edgeTTSPitch: TTSEdgePitchType;
+    speed: number;
+};
 export type RealtimeConfig = ChatConfig["realtimeConfig"];
 
 export function limitNumber(
@@ -142,6 +158,9 @@ export const TTSConfigValidator = {
   edgeTTSVoiceName(x: string) {
     // 新增: Edge TTS 声音名称验证器 (简单类型断言)
     return x as TTSEdgeVoiceType;
+  },
+  edgeTTSPitch(x: string) { // 新增: Edge TTS 音调验证器
+    return x as TTSEdgePitchType;
   },
   speed(x: number) {
     return limitNumber(x, 0.25, 4.0, 1.0);
@@ -210,7 +229,7 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.2,
+    version: 4.3,
 
     merge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
@@ -227,6 +246,18 @@ export const useAppConfig = createPersistStore(
       const mergedTtsConfig = { ...currentState.ttsConfig, ...(state.ttsConfig || {}) };
       return { ...currentState, ...state, models: models };
     },
+
+    if (!state.ttsConfig?.hasOwnProperty('edgeTTSPitch')) {
+      mergedTtsConfig.edgeTTSPitch = DEFAULT_CONFIG.ttsConfig.edgeTTSPitch;
+  }
+
+  return {
+    ...currentState,
+    ...state,
+    models: models,
+    ttsConfig: mergedTtsConfig, // 使用合并后的 ttsConfig
+};
+},
 
     migrate(persistedState, version) {
       const state = persistedState as ChatConfig;
@@ -270,6 +301,17 @@ export const useAppConfig = createPersistStore(
           state.ttsConfig.edgeTTSVoiceName = DEFAULT_EDGE_TTS_VOICE;
         }
       }
+
+      if (version < 4.3) {
+        if (!state.ttsConfig) {
+           state.ttsConfig = { ...DEFAULT_CONFIG.ttsConfig };
+        }
+        // 如果 ttsConfig 存在但没有 edgeTTSPitch 属性，则添加默认值
+        if (!state.ttsConfig.hasOwnProperty('edgeTTSPitch')) {
+           state.ttsConfig.edgeTTSPitch = PITCH.DEFAULT;
+        }
+      }
+
 
 
       return state as any;
