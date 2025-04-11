@@ -247,7 +247,7 @@ export const useAppConfig = createPersistStore(
       return { ...currentState, ...state, models: models };
     },
 
-    afterMerge(persistedState, currentState) {
+    /*afterMerge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
       const mergedTtsConfig = { ...currentState.ttsConfig, ...(state?.ttsConfig || {}) };
       if (!state?.ttsConfig?.hasOwnProperty('edgeTTSPitch')) {
@@ -257,7 +257,7 @@ export const useAppConfig = createPersistStore(
         ...currentState,
         ttsConfig: mergedTtsConfig, // 使用合并后的 ttsConfig
       };
-    },
+    },*/
       migrate(persistedState, version) {
       const state = persistedState as ChatConfig;
 
