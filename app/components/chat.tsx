@@ -1319,7 +1319,7 @@ function _Chat() {
     // 检查 TTS 是否启用
     if (!config.ttsConfig.enable) {
       // showToast(Locale.Settings.TTS.Disabled); // 旧的错误代码
-      showToast(Locale.Settings.TTS.DisabledMessage); // <--- 修改为正确的键名
+      showToast("TTS is disabled."); // <--- 修改为正确的键名
       return;
     }
 
