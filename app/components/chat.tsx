@@ -842,21 +842,21 @@ export function ChatActions(props: {
 
         {!isMobileScreen && (
           <ChatAction
-            onClick={() => props.setShowShortcutKeyModal(true)}
-            text={Locale.Chat.ShortcutKey.Title}
-            icon={<ShortcutkeyIcon />}
-          />
-        )}
+          onClick={() => props.setShowShortcutKeyModal(true)}
+          text="Shortcut Keys" // 硬编码
+          icon={<ShortcutkeyIcon />}
+        />
+      )}
         {!isMobileScreen && <MCPAction />}
       </>
       <div className={styles["chat-input-actions-end"]}>
         {config.realtimeConfig.enable && (
           <ChatAction
-            onClick={() => props.setShowChatSidePanel(true)}
-            text={"Realtime Chat"}
-            icon={<HeadphoneIcon />}
-          />
-        )}
+          onClick={() => props.setShowChatSidePanel(true)}
+          text="Realtime Chat" // 硬编码
+          icon={<HeadphoneIcon />}
+        />
+      )}
       </div>
     </div>
   );
@@ -1318,17 +1318,19 @@ function _Chat() {
 
     // 检查 TTS 是否启用
     if (!config.ttsConfig.enable) {
-      showToast(Locale.Settings.TTS.Disabled);
+      // showToast(Locale.Settings.TTS.Disabled); // 旧的错误代码
+      showToast("TTS is disabled."); // TODO: 修改为正确的键名
       return;
     }
 
     // 准备纯文本内容
     const { markdownToTxt } = require("markdown-to-txt"); // 或者使用 import
     const textContent = markdownToTxt(text);
-    if (!textContent) {
-      showToast(Locale.Chat.Actions.NoTextToSpeak);
-      return;
-    }
+if (!textContent) {
+  showToast("No text to speak."); // 硬编码
+  return;
+}
+
 
     // 如果正在播放，则停止
     if (speechStatus) {
