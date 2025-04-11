@@ -1331,7 +1331,7 @@ function _Chat() {
           edgeVoiceName,
           OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3,
         );
-        audioBuffer = await tts.toArrayBuffer(textContent);
+        audioBuffer = await tts.toArrayBuffer(textContent)
         .catch((e) => {
           console.error("[Edge TTS Error]", e);
           setSpeechLoading(false);
@@ -1345,7 +1345,7 @@ function _Chat() {
           input: textContent,
           voice: config.ttsConfig.voice,
           speed: config.ttsConfig.speed,
-        });
+        })
         .catch((e) => {
           console.error("[OpenAI Speech API Error]", e);
           setSpeechLoading(false);
