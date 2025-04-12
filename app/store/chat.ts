@@ -127,8 +127,8 @@ import {
     };
   }
 
-function estimateTokenLengthForContent(content: string | MessageContent[]): number {
-  if (typeof content === 'string') {
+  function estimateTokenLengthForContent(content: string | MultimodalContent[]): number {
+    if (typeof content === 'string') {
     // 对字符串内容的现有逻辑
     return estimateTokenLength(content);
   } else if (Array.isArray(content)) {
@@ -464,6 +464,7 @@ function estimateTokenLengthForContent(content: string | MessageContent[]): numb
                           }
                         }
                       }
+                      // --- content 构建逻辑结束 ---
 
 
            // 检查 messageContents 是否为空
