@@ -77,7 +77,7 @@ const DEFAULT_ACCESS_STATE = {
   // google ai studio
   googleUrl: DEFAULT_GOOGLE_URL,
   googleApiKey: "",
-  googleApiVersion: "v1",
+  googleApiVersion: "v1beta",
   googleSafetySettings: GoogleSafetySettingsThreshold.BLOCK_NONE,
 
   // anthropic
@@ -143,7 +143,7 @@ const DEFAULT_ACCESS_STATE = {
   visionModels: "",
 
   // tts config
-  edgeTTSVoiceName: "zh-CN-YunxiNeural",
+  //edgeTTSVoiceName: "zh-CN-YunxiNeural",
 };
 
 export const useAccessStore = createPersistStore(
@@ -159,11 +159,11 @@ export const useAccessStore = createPersistStore(
       this.fetch();
       return get().visionModels;
     },
-    edgeVoiceName() {
-      this.fetch();
+    //edgeVoiceName() {
+    // this.fetch();
 
-      return get().edgeTTSVoiceName;
-    },
+    // return get().edgeTTSVoiceName;
+    // },
 
     isValidOpenAI() {
       return ensure(get(), ["openaiApiKey"]);
@@ -277,7 +277,7 @@ export const useAccessStore = createPersistStore(
   }),
   {
     name: StoreKey.Access,
-    version: 2,
+    version: 2.1,
     migrate(persistedState, version) {
       if (version < 2) {
         const state = persistedState as {
@@ -289,7 +289,12 @@ export const useAccessStore = createPersistStore(
         state.openaiApiKey = state.token;
         state.azureApiVersion = "2023-08-01-preview";
       }
-
+      if (version < 2.1) {
+        // 假设 persistedState 是旧的状态对象
+        if (persistedState && persistedState.hasOwnProperty('edgeTTSVoiceName')) {
+          delete (persistedState as any).edgeTTSVoiceName; 
+        }
+      }
       return persistedState as any;
     },
   },
