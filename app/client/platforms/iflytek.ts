@@ -65,64 +65,11 @@ export class SparkApi implements LLMApi {
   }
 
   async chat(options: ChatOptions) {
-    // --- 开始: 通用修改逻辑 (适配 Iflytek) ---
-    const processedMessages: ChatOptions["messages"] = [];
+    const messages: ChatOptions["messages"] = [];
     for (const v of options.messages) {
-      let processedContent: string | MultimodalContent[];
-      const modelConfig = { ...useAppConfig.getState().modelConfig, ...useChatStore.getState().currentSession().mask.modelConfig, ...{ model: options.config.model } };
-      const visionModel = isVisionModel(modelConfig.model); // Iflytek 可能没有 vision 模型
-
-      if (typeof v.content === 'string') {
-        processedContent = (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function')
-          ? getMessageTextContentWithoutThinking(v)
-          : v.content;
-      } else {
-        const tempContent: MultimodalContent[] = [];
-        let fileText = "";
-
-        for (const part of v.content) {
-          if (part.type === 'text') {
-            tempContent.push(part);
-          } else if (part.type === 'image_url') {
-            // Iflytek API 格式未知，暂时忽略图片
-            // if (visionModel) { tempContent.push(part); }
-          } else if (part.type === 'file_url' && part.file_url) {
-            fileText += (fileText ? "\n" : "") + `[File attached: ${part.file_url.name}]`;
-          }
-        }
-
-        if (fileText) {
-          const lastTextPart = tempContent.slice().reverse().find(p => p.type === 'text') as TextContent | undefined;
-          if (lastTextPart) {
-            lastTextPart.text = (lastTextPart.text ?? "") + "\n" + fileText;
-          } else {
-            tempContent.push({ type: 'text', text: fileText });
-          }
-        }
-
-        const filteredContent = tempContent.filter(p => !(p.type === 'text' && !(p.text ?? "").trim()));
-
-        if (filteredContent.every(p => p.type === 'text')) {
-          processedContent = filteredContent.map(p => p.text ?? "").join("\n");
-        } else if (filteredContent.length > 0) {
-          // Iflytek API 可能只接受字符串
-          processedContent = filteredContent.map(p => p.text ?? "").join("\n"); // 强制转字符串
-        } else {
-          processedContent = getMessageTextContent(v);
-        }
-
-         if (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function') {
-             if (typeof processedContent === 'string') {
-                 processedContent = getMessageTextContentWithoutThinking({ role: v.role, content: processedContent });
-             } // 数组情况已处理为字符串
-         }
-      }
-
-      const content = processedContent;
-      // 确保 content 是字符串
-      processedMessages.push({ role: v.role, content: typeof content === 'string' ? content : getMessageTextContent(v) });
+      const content = getMessageTextContent(v);
+      messages.push({ role: v.role, content });
     }
-    // --- 结束: 通用修改逻辑 ---
 
     const modelConfig = {
       ...useAppConfig.getState().modelConfig,
@@ -134,7 +81,7 @@ export class SparkApi implements LLMApi {
     };
 
     const requestPayload: RequestPayload = {
-      messages: processedMessages, // 使用处理后的 messages
+      messages,
       stream: options.config.stream,
       model: modelConfig.model,
       temperature: modelConfig.temperature,

@@ -76,77 +76,25 @@ export class ErnieApi implements LLMApi {
     throw new Error("Method not implemented.");
   }
 
-  
   async chat(options: ChatOptions) {
-    // --- 开始: 通用修改逻辑 (适配 Baidu) ---
-    const processedMessagesIntermediate: ChatOptions["messages"] = [];
-    for (const v of options.messages) {
-      let processedContent: string | MultimodalContent[];
-      const modelConfig = { ...useAppConfig.getState().modelConfig, ...useChatStore.getState().currentSession().mask.modelConfig, ...{ model: options.config.model } };
-      const visionModel = isVisionModel(modelConfig.model); // Baidu 可能没有 vision 模型，但保留逻辑
-
-      if (typeof v.content === 'string') {
-        processedContent = (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function')
-          ? getMessageTextContentWithoutThinking(v)
-          : v.content;
-      } else {
-        const tempContent: MultimodalContent[] = [];
-        let fileText = "";
-
-        for (const part of v.content) {
-          if (part.type === 'text') {
-            tempContent.push(part);
-          } else if (part.type === 'image_url') {
-            // Baidu API 格式未知，暂时忽略图片或添加提示
-            // if (visionModel) { tempContent.push(part); }
-          } else if (part.type === 'file_url' && part.file_url) {
-            fileText += (fileText ? "\n" : "") + `[File attached: ${part.file_url.name}]`;
-          }
-        }
-
-        if (fileText) {
-          const lastTextPart = tempContent.slice().reverse().find(p => p.type === 'text') as TextContent | undefined;
-          if (lastTextPart) {
-            lastTextPart.text = (lastTextPart.text ?? "") + "\n" + fileText;
-          } else {
-            tempContent.push({ type: 'text', text: fileText });
-          }
-        }
-
-        const filteredContent = tempContent.filter(p => !(p.type === 'text' && !(p.text ?? "").trim()));
-
-        if (filteredContent.every(p => p.type === 'text')) {
-          processedContent = filteredContent.map(p => p.text ?? "").join("\n");
-        } else if (filteredContent.length > 0) {
-          // Baidu API 可能只接受字符串，如果数组包含非文本，则回退
-          processedContent = filteredContent.map(p => p.text ?? "").join("\n"); // 强制转字符串
-        } else {
-          processedContent = getMessageTextContent(v);
-        }
-
-         if (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function') {
-             if (typeof processedContent === 'string') {
-                 processedContent = getMessageTextContentWithoutThinking({ role: v.role, content: processedContent });
-             } // 数组情况已在上面处理为字符串
-         }
-      }
-
-      const content = processedContent;
-      processedMessagesIntermediate.push({ role: v.role, content });
-    }
-    // --- 结束: 通用修改逻辑 ---
-
-    // --- Baidu 特定处理 ---
-    const messages = processedMessagesIntermediate.map((v) => ({
+    const messages = options.messages.map((v) => ({
       // "error_code": 336006, "error_msg": "the role of message with even index in the messages must be user or function",
       role: v.role === "system" ? "user" : v.role,
-      // 确保 content 是字符串
-      content: typeof v.content === 'string' ? v.content : getMessageTextContent(v),
+      content: getMessageTextContent(v),
     }));
 
     // "error_code": 336006, "error_msg": "the length of messages must be an odd number",
     if (messages.length % 2 === 0) {
       if (messages.at(0)?.role === "user") {
+        messages.splice(1, 0, {
+          role: "assistant",
+          content: " ",
+        });
+      } else {
+        messages.unshift({
+          role: "user",
+          content: " ",
+        });
       }
     }
 

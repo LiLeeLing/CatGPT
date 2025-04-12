@@ -61,78 +61,11 @@ export class XAIApi implements LLMApi {
   }
 
   async chat(options: ChatOptions) {
-    // --- 开始: 通用修改逻辑 (适配 XAI) ---
-    const processedMessages: ChatOptions["messages"] = [];
+    const messages: ChatOptions["messages"] = [];
     for (const v of options.messages) {
-      let processedContent: string | MultimodalContent[];
-      const modelConfig = { ...useAppConfig.getState().modelConfig, ...useChatStore.getState().currentSession().mask.modelConfig, ...{ model: options.config.model } };
-      const visionModel = isVisionModel(modelConfig.model); // XAI 可能有 vision 模型
-
-      if (typeof v.content === 'string') {
-        processedContent = (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function')
-          ? getMessageTextContentWithoutThinking(v)
-          : v.content;
-      } else {
-        const tempContent: MultimodalContent[] = [];
-        let fileText = "";
-
-        for (const part of v.content) {
-          if (part.type === 'text') {
-            tempContent.push(part);
-          } else if (part.type === 'image_url') {
-            if (visionModel && part.image_url) {
-               // XAI API 格式未知，暂时使用 OpenAI 格式
-               tempContent.push(part);
-            }
-          } else if (part.type === 'file_url' && part.file_url) {
-            fileText += (fileText ? "\n" : "") + `[File attached: ${part.file_url.name}]`;
-          }
-        }
-
-        if (fileText) {
-          const lastTextPart = tempContent.slice().reverse().find(p => p.type === 'text') as TextContent | undefined;
-          if (lastTextPart) {
-            lastTextPart.text = (lastTextPart.text ?? "") + "\n" + fileText;
-          } else {
-            tempContent.push({ type: 'text', text: fileText });
-          }
-        }
-
-        const filteredContent = tempContent.filter(p => !(p.type === 'text' && !(p.text ?? "").trim()));
-
-        if (filteredContent.every(p => p.type === 'text')) {
-          processedContent = filteredContent.map(p => p.text ?? "").join("\n");
-        } else if (filteredContent.length > 0) {
-          // XAI API 可能接受数组
-          processedContent = filteredContent;
-        } else {
-          processedContent = getMessageTextContent(v);
-        }
-
-         if (v.role === "assistant" && typeof getMessageTextContentWithoutThinking === 'function') {
-             if (typeof processedContent === 'string') {
-                 processedContent = getMessageTextContentWithoutThinking({ role: v.role, content: processedContent });
-             } else if (Array.isArray(processedContent)) {
-                 // 数组情况下的 thinking 处理
-                 processedContent.forEach(part => {
-                     if (part.type === 'text' && part.text) {
-                         part.text = getMessageTextContentWithoutThinking({ role: v.role, content: part.text });
-                     }
-                 });
-                 processedContent = processedContent.filter(p => !(p.type === 'text' && !(p.text ?? "").trim()));
-                 if (processedContent.length === 1 && processedContent[0].type === 'text') {
-                     processedContent = processedContent[0].text ?? "";
-                 } else if (processedContent.length === 0) {
-                     processedContent = "";
-                 }
-             }
-         }
-      }
-
-      const content = processedContent;
-      processedMessages.push({ role: v.role, content });
+      const content = await preProcessImageContent(v.content);
+      messages.push({ role: v.role, content });
     }
-    // --- 结束: 通用修改逻辑 ---
 
     const modelConfig = {
       ...useAppConfig.getState().modelConfig,
@@ -144,7 +77,7 @@ export class XAIApi implements LLMApi {
     };
 
     const requestPayload: RequestPayload = {
-      messages: processedMessages, // 使用处理后的 messages
+      messages,
       stream: options.config.stream,
       model: modelConfig.model,
       temperature: modelConfig.temperature,
