@@ -462,18 +462,19 @@ export const DEFAULT_EDGE_TTS_VOICES = [
   // 女声
   "zh-CN-XiaoshuangNeural", // 萝莉/儿童
   "zh-CN-XiaoyouNeural",    // 儿童
-  "zh-CN-XiaochenNeural",   // 年轻活泼
+  "zh-CN-XiaochenMultilingualNeural",   // 年轻活泼
   "zh-CN-XiaohanNeural",    // 年轻自然
   "zh-CN-XiaoxuanNeural",   // 年轻对话感
   "zh-CN-XiaoyiNeural",     // 年轻温柔
   "zh-CN-XiaoqiuNeural",    // 年轻清新
   "zh-CN-XiaorouNeural",    // 年轻温柔
   "zh-CN-XiaomengNeural",   // 年轻新闻感
-  "zh-CN-XiaoxiaoNeural",   // 标准
+  "zh-CN-XiaoxiaoMultilingualNeural",   // 标准
   "zh-CN-XiaoyanNeural",    // 标准
   "zh-CN-liaoning-XiaobeiNeural", // 辽宁
   "zh-CN-shaanxi-XiaoniNeural",   // 陕西
   // 男声
+  "zh-CN-YunyiMultilingualNeural",    // 男声
   "zh-CN-YunyangNeural",    // 男声
   "zh-CN-YunxiNeural",      // 男声
   "zh-CN-YunjianNeural",    // 男声
