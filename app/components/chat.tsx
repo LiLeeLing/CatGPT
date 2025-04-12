@@ -1022,6 +1022,7 @@ function _Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const { submitKey, shouldSubmit } = useSubmitHandler();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [hitBottom, setHitBottom] = useState(true); 
   const isScrolledToBottom = scrollRef?.current
     ? Math.abs(
         scrollRef.current.scrollHeight -
@@ -1288,7 +1289,7 @@ const [documentUploading, setDocumentUploading] = useState(false);
     const files = getMessageFiles(userMessage);
     const images = getMessageImages(userMessage);
     chatStore
-      .onUserInput(textContent, files, images) 
+      .onUserInput(textContent, files, images)
       .then(() => setIsLoading(false));
     inputRef.current?.focus();
   };
