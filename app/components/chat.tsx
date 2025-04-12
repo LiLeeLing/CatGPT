@@ -1281,16 +1281,14 @@ const [documentUploading, setDocumentUploading] = useState(false);
       return;
     }
 
-    // delete the original messages
-    deleteMessage(userMessage.id);
-    deleteMessage(botMessage?.id);
-
     // resend the message
     setIsLoading(true);
     const textContent = getMessageTextContent(userMessage);
+    // 直接从要重发的消息中获取文件和图片
+    const files = getMessageFiles(userMessage);
     const images = getMessageImages(userMessage);
     chatStore
-      .onUserInput(textContent, images, undefined, attachFiles)
+      .onUserInput(textContent, files, images) 
       .then(() => setIsLoading(false));
     inputRef.current?.focus();
   };

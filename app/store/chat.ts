@@ -409,10 +409,11 @@ function estimateTokenLengthForContent(content: string | MessageContent[]): numb
 
           userInputText: string, // 用户输入的文本
 
-          //attachImages?: string[],
+                    // attachFiles?: UploadFile[],
+          // attachImages?: string[],
           attachments?: UploadFile[],
+          attachImages?: string[],
           isMcpResponse?: boolean,
-          //attachFiles?: UploadFile[],
         ) {
           const session = get().currentSession();
           const modelConfig = session.mask.modelConfig;
@@ -420,53 +421,50 @@ function estimateTokenLengthForContent(content: string | MessageContent[]): numb
           const accessStore = useAccessStore.getState(); // 获取 access store
           const configStore = useAppConfig.getState(); // 获取 config store
 
-           // --- 重构 content 构建逻辑 ---
-           const messageContents: MessageContent[] = [];
-           const modelIsVision = isVisionModel(currentModel); // 检查模型是否支持 Vision
+                      const messageContents: MessageContent[] = [];
+                      const modelIsVision = isVisionModel(currentModel); // 检查模型是否支持 Vision
 
-           // 1. 添加用户文本输入 (如果存在且不是 MCP 响应)
-           if (userInputText && !isMcpResponse) {
-             const filledText = fillTemplateWith(userInputText, modelConfig);
-             messageContents.push({ type: "text", text: filledText });
-           } else if (userInputText && isMcpResponse) {
-             // MCP 响应直接使用文本
-             messageContents.push({ type: "text", text: userInputText });
-           }
+                      // 1. 添加用户文本输入
+                      if (userInputText && !isMcpResponse) {
+                        const filledText = fillTemplateWith(userInputText, modelConfig);
+                        messageContents.push({ type: "text", text: filledText });
+                      } else if (userInputText && isMcpResponse) {
+                        // MCP 响应直接使用文本
+                        messageContents.push({ type: "text", text: userInputText });
+                      }
 
-           // 2. 处理附件 (图片和文件)
-           if (attachments && attachments.length > 0) {
-             for (const file of attachments) {
-               const isImage = file.mimeType?.startsWith("image/");
+                      // 2. 处理图片附件 (attachImages)
+                      if (attachImages && attachImages.length > 0) {
+                        if (modelIsVision) {
+                          attachImages.forEach(imageUrl => {
+                            // 确保 imageUrl 是有效的 base64 编码或 URL
+                            if (imageUrl && typeof imageUrl === 'string') {
+                               messageContents.push({ type: "image_url", image_url: { url: imageUrl } });
+                            } else {
+                               console.warn("Invalid image URL provided:", imageUrl);
+                            }
+                          });
+                        } else {
+                          console.warn(`Model ${currentModel} does not support images. Skipping images.`);
+                          messageContents.push({ type: "text", text: `[${attachImages.length} image(s) were uploaded but ignored as the current model doesn't support images]` });
+                        }
+                      }
 
-               if (isImage) {
-                 // 如果是图片
-                 if (modelIsVision) {
-                   // 并且模型支持 Vision，则添加 image_url
-                   messageContents.push({
-                     type: "image_url",
-                     image_url: { url: file.url }, // 使用 UploadFile 中的 url
-                   });
-                 } else {
-                   // 如果模型不支持 Vision，添加文本提示
-                   console.warn(
-                     `Model ${currentModel} does not support images. Skipping image: ${file.name}`,
-                   );
-                   messageContents.push({ type: "text", text: `[Image ${file.name} was uploaded but ignored as the current model doesn't support images]` });
-                 }
-               } else {
-                 // 如果是其他文件, 使用 file_url 策略
-                 messageContents.push({
-                   type: "file_url",
-                   file_url: file, // 包含 url, name, tokenCount, mimeType 等
-                 });
-                 // 确保 file.tokenCount 在 chat.tsx 上传时已计算并填充
-                 if (file.tokenCount === undefined) {
-                    console.warn(`Token count for file ${file.name} is undefined. Using default estimate.`);
-                 }
-               }
-             }
-           }
-           // --- content 构建逻辑结束 ---
+                      // 3. 处理文件附件 (attachFiles)
+                      if (attachFiles && attachFiles.length > 0) {
+                        for (const file of attachFiles) {
+                          // 使用 file_url 策略处理所有文件
+                          messageContents.push({
+                            type: "file_url",
+                            file_url: file, // 包含 url, name, tokenCount, mimeType 等
+                          });
+                          // 确保 file.tokenCount 在 chat.tsx 上传时已计算并填充
+                          if (file.tokenCount === undefined) {
+                             console.warn(`Token count for file ${file.name} is undefined. Using default estimate.`);
+                          }
+                        }
+                      }
+
 
            // 检查 messageContents 是否为空
            if (messageContents.length === 0) {
