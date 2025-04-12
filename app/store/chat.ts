@@ -877,7 +877,6 @@ async getMessagesWithMemory(): Promise<RequestMessage[]> {
                          : msg.content.filter(p => p.type === 'text'), // 示例：为标题过滤非文本
               }));
               */
-          });
 
 
           // 确保传递给 chat 的 messages 是 RequestMessage[]
@@ -953,7 +952,6 @@ async getMessagesWithMemory(): Promise<RequestMessage[]> {
                          : msg.content, // 按原样传递数组
               }));
               */
-          });
 
           const summarizeSystemMessage: RequestMessage = { // 明确类型
             role: "system",

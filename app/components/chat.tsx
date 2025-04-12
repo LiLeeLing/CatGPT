@@ -504,12 +504,13 @@ export function ChatActions(props: {
   uploadImage: () => void;
   setAttachImages: (images: string[]) => void;
   setAttachFiles: (files: UploadFile[]) => void;
-  setUploading: (uploading: boolean) => void;
+  // setUploading: (uploading: boolean) => void;
   showPromptModal: () => void;
   scrollToBottom: () => void;
   showPromptHints: () => void;
   hitBottom: boolean;
-  uploading: boolean;
+  imageUploading: boolean;
+  documentUploading: boolean;
   setShowShortcutKeyModal: React.Dispatch<React.SetStateAction<boolean>>;
   setUserInput: (input: string) => void;
   setShowChatSidePanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -635,14 +636,14 @@ export function ChatActions(props: {
         <ChatAction
           onClick={props.uploadImage}
           text={Locale.Chat.InputActions.UploadImage}
-          icon={props.uploading ? <LoadingButtonIcon /> : <ImageIcon />}
-        />
+          icon={props.imageUploading ? <LoadingButtonIcon /> : <ImageIcon />}
+          />
       )}
       <ChatAction
         onClick={props.uploadDocument}
         text={"Upload Plain Text File"}
-        icon={props.uploading ? <LoadingButtonIcon /> : <UploadDocIcon />}
-      />
+        icon={props.documentUploading ? <LoadingButtonIcon /> : <UploadDocIcon />}
+        />
       <ChatAction
         onClick={nextTheme}
         text={Locale.Chat.InputActions.Theme[theme]}
@@ -1043,14 +1044,15 @@ function _Chat() {
     (isScrolledToBottom || isAttachWithTop) && !isTyping,
     session.messages,
   );
-  const [hitBottom, setHitBottom] = useState(true);
   const isMobileScreen = useMobileScreen();
-  const navigate = useNavigate();
-  const [attachImages, setAttachImages] = useState<string[]>([]);
-  const [attachFiles, setAttachFiles] = useState<UploadFile[]>([]);
-  const [uploading, setUploading] = useState(false);
+const navigate = useNavigate();
+const [attachImages, setAttachImages] = useState<string[]>([]);
+const [attachFiles, setAttachFiles] = useState<UploadFile[]>([]);
+// 将单个 uploading 状态拆分为两个
+const [imageUploading, setImageUploading] = useState(false);
+const [documentUploading, setDocumentUploading] = useState(false);
 
-  // prompt hints
+// prompt hints
   const promptStore = usePromptStore();
   const [promptHints, setPromptHints] = useState<RenderPrompt[]>([]);
   const onSearch = useDebouncedCallback(
@@ -1575,93 +1577,192 @@ function _Chat() {
     const files: UploadFile[] = [];
     files.push(...attachFiles);
 
-    files.push(
-      ...(await new Promise<UploadFile[]>((res, rej) => {
-        const fileInput = document.createElement("input");
-        fileInput.type = "file";
-        fileInput.accept = "text/*";
-        fileInput.multiple = true;
-        fileInput.onchange = (event: any) => {
-          setUploading(true);
-          const inputFiles = event.target.files;
-          const imagesData: UploadFile[] = [];
-          (async () => {
-            for (let i = 0; i < inputFiles.length; i++) {
-              const file = inputFiles[i];
-              try {
-                const dataUrl = await uploadFileRemote(file);
-                const fileData: UploadFile = { name: file.name, url: dataUrl };
-                const tokenCount: number = await countTokens(fileData);
-                fileData.tokenCount = tokenCount;
-                imagesData.push(fileData);
-                if (
-                  imagesData.length === 3 ||
-                  imagesData.length === inputFiles.length
-                ) {
-                  setUploading(false);
-                  res(imagesData);
-                }
-              } catch (e) {
-                setUploading(false);
-                rej(e);
-              }
+    try { // 添加 try...catch 块
+      files.push(
+        ...(await new Promise<UploadFile[]>((res, rej) => {
+          const fileInput = document.createElement("input");
+          fileInput.type = "file";
+          fileInput.accept = "text/*"; // 限制为文本文件
+          fileInput.multiple = true;
+          fileInput.onchange = (event: any) => {
+            // 修改这里
+            setDocumentUploading(true);
+            const inputFiles = event.target.files;
+            if (!inputFiles || inputFiles.length === 0) {
+              // 修改这里
+              setDocumentUploading(false);
+              rej(new Error("No files selected")); // 处理未选择文件的情况
+              return;
             }
-          })();
-        };
-        fileInput.click();
-      })),
-    );
 
-    const filesLength = files.length;
-    if (filesLength > 3) {
-      files.splice(3, filesLength - 3);
+            const filesData: UploadFile[] = [];
+            const promises: Promise<void>[] = []; // 用于收集所有处理文件的 Promise
+
+            const currentFileCount = attachFiles.length;
+            const remainingSlots = 3 - currentFileCount;
+            const filesToProcess = Math.min(inputFiles.length, remainingSlots);
+
+            if (filesToProcess <= 0) {
+               // 修改这里
+               setDocumentUploading(false);
+               showToast(Locale.Chat.UploadLimit); // 提示已达上限
+               res([]); // 返回空数组
+               return;
+            }
+            if (inputFiles.length > remainingSlots) {
+               showToast(Locale.Chat.UploadLimit); // 提示部分文件因达到上限未添加
+            }
+
+
+            for (let i = 0; i < filesToProcess; i++) {
+              const file = inputFiles[i];
+              promises.push(
+                (async () => { // 使用 async IIFE
+                  try {
+                    const dataUrl = await uploadFileRemote(file);
+                    const fileData: UploadFile = { name: file.name, url: dataUrl };
+                    const tokenCount: number = await countTokens(fileData);
+                    fileData.tokenCount = tokenCount;
+                    filesData.push(fileData);
+                  } catch (e) {
+                    console.error("Error processing file:", file.name, e);
+                    showToast(`Error processing file: ${file.name}`);
+                    // 单个文件处理失败不中断整个过程，但也不添加到结果中
+                  }
+                })()
+              );
+            }
+
+            Promise.all(promises).then(() => { // 等待所有文件处理完成
+              // 修改这里
+              setDocumentUploading(false);
+              res(filesData); // 返回成功处理的文件
+            }).catch((e) => { // 这个 catch 理论上不会触发，因为内部 Promise 已处理错误
+               // 修改这里
+               setDocumentUploading(false);
+               console.error("Unexpected error during file processing:", e);
+               rej(e);
+            });
+          };
+          // 处理用户取消选择文件的情况
+          fileInput.addEventListener('cancel', () => {
+            // 修改这里
+            setDocumentUploading(false);
+            rej(new Error("File selection cancelled"));
+          });
+          fileInput.click();
+        })),
+      );
+
+      const filesLength = files.length;
+      // 限制逻辑移到 onchange 内部，这里可以简化
+      // if (filesLength > 3) {
+      //   files.splice(3, filesLength - 3);
+      // }
+      setAttachFiles(files);
+
+    } catch (error) { // 捕获 Promise 的拒绝错误 (例如用户取消选择)
+      // 修改这里
+      setDocumentUploading(false); // 确保 loading 状态被重置
+      if (error instanceof Error && error.message !== "File selection cancelled" && error.message !== "No files selected") {
+         console.error("Error selecting files:", error);
+         showToast(Locale.Chat.UploadFailed); // 显示通用上传失败提示
+      }
     }
-    setAttachFiles(files);
   }
 
   async function uploadImage() {
     const images: string[] = [];
     images.push(...attachImages);
 
-    images.push(
-      ...(await new Promise<string[]>((res, rej) => {
-        const fileInput = document.createElement("input");
-        fileInput.type = "file";
-        fileInput.accept =
-          "image/png, image/jpeg, image/webp, image/heic, image/heif";
-        fileInput.multiple = true;
-        fileInput.onchange = (event: any) => {
-          setUploading(true);
-          const files = event.target.files;
-          const imagesData: string[] = [];
-          for (let i = 0; i < files.length; i++) {
-            const file = event.target.files[i];
-            uploadImageRemote(file)
-              .then((dataUrl) => {
-                imagesData.push(dataUrl);
-                if (
-                  imagesData.length === 3 ||
-                  imagesData.length === files.length
-                ) {
-                  setUploading(false);
-                  res(imagesData);
-                }
-              })
-              .catch((e) => {
-                setUploading(false);
-                rej(e);
-              });
-          }
-        };
-        fileInput.click();
-      })),
-    );
+    try { // 添加 try...catch 块
+      images.push(
+        ...(await new Promise<string[]>((res, rej) => {
+          const fileInput = document.createElement("input");
+          fileInput.type = "file";
+          fileInput.accept =
+            "image/png, image/jpeg, image/webp, image/heic, image/heif";
+          fileInput.multiple = true;
+          fileInput.onchange = (event: any) => {
+            // 修改这里
+            setImageUploading(true);
+            const inputFiles = event.target.files;
+            if (!inputFiles || inputFiles.length === 0) {
+              // 修改这里
+              setImageUploading(false);
+              rej(new Error("No files selected"));
+              return;
+            }
 
-    const imagesLength = images.length;
-    if (imagesLength > 3) {
-      images.splice(3, imagesLength - 3);
+            const imagesData: string[] = [];
+            const promises: Promise<void>[] = [];
+
+            const currentImageCount = attachImages.length;
+            const remainingSlots = 3 - currentImageCount;
+            const filesToProcess = Math.min(inputFiles.length, remainingSlots);
+
+            if (filesToProcess <= 0) {
+               // 修改这里
+               setImageUploading(false);
+               showToast(Locale.Chat.UploadLimit);
+               res([]);
+               return;
+            }
+            if (inputFiles.length > remainingSlots) {
+               showToast(Locale.Chat.UploadLimit);
+            }
+
+            for (let i = 0; i < filesToProcess; i++) {
+              const file = inputFiles[i];
+              promises.push(
+                (async () => {
+                  try {
+                    const dataUrl = await uploadImageRemote(file);
+                    imagesData.push(dataUrl);
+                  } catch (e) {
+                    console.error("Error processing image:", file.name, e);
+                    showToast(`Error processing image: ${file.name}`);
+                  }
+                })()
+              );
+            }
+
+            Promise.all(promises).then(() => {
+              // 修改这里
+              setImageUploading(false);
+              res(imagesData);
+            }).catch((e) => {
+               // 修改这里
+               setImageUploading(false);
+               console.error("Unexpected error during image processing:", e);
+               rej(e);
+            });
+          };
+          // 处理用户取消选择文件的情况
+          fileInput.addEventListener('cancel', () => {
+            // 修改这里
+            setImageUploading(false);
+            rej(new Error("File selection cancelled"));
+          });
+          fileInput.click();
+        })),
+      );
+
+      const imagesLength = images.length;
+      if (imagesLength > 3) {
+        images.splice(3, imagesLength - 3);
+      }
+      // setAttachFiles([]); // 清空文件附件，因为正在上传图片
+      // setAttachImages(images);
+
+    } catch (error) {
+      // 修改这里
+      setImageUploading(false);
+      if (error instanceof Error && error.message !== "File selection cancelled" && error.message !== "No files selected") {
+         console.error("Error selecting images:", error);
+         showToast(Locale.Chat.UploadFailed);
+      }
     }
-    setAttachImages(images);
   }
 
   // 快捷键 shortcut keys
@@ -2152,12 +2253,13 @@ function _Chat() {
                 uploadImage={uploadImage}
                 setAttachImages={setAttachImages}
                 setAttachFiles={setAttachFiles}
-          setUploading={setUploading}
+          // setUploading={setUploading}
                 showPromptModal={() => setShowPromptModal(true)}
                 scrollToBottom={scrollToBottom}
                 hitBottom={hitBottom}
-                uploading={uploading}
-                showPromptHints={() => {
+                imageUploading={imageUploading}
+                documentUploading={documentUploading}
+                    showPromptHints={() => {
                   // Click again to close
                   if (promptHints.length > 0) {
                     setPromptHints([]);
