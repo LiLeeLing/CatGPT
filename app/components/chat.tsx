@@ -1533,44 +1533,65 @@ const [documentUploading, setDocumentUploading] = useState(false);
   const handlePaste = useCallback(
     async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const currentModel = chatStore.currentSession().mask.modelConfig.model;
-      if (!isVisionModel(currentModel)) {
-        return;
-      }
       const items = (event.clipboardData || window.clipboardData).items;
-      for (const item of items) {
-        if (item.kind === "file" && item.type.startsWith("image/")) {
-          event.preventDefault();
-          const file = item.getAsFile();
-          if (file) {
-            const images: string[] = [];
-            images.push(...attachImages);
-            images.push(
-              ...(await new Promise<string[]>((res, rej) => {
-                setUploading(true);
-                const imagesData: string[] = [];
-                uploadImageRemote(file)
-                  .then((dataUrl) => {
-                    imagesData.push(dataUrl);
-                    setUploading(false);
-                    res(imagesData);
-                  })
-                  .catch((e) => {
-                    setUploading(false);
-                    rej(e);
-                  });
-              })),
-            );
-            const imagesLength = images.length;
+      let fileProcessed = false; // 标记是否处理了任何文件
 
-            if (imagesLength > 3) {
-              images.splice(3, imagesLength - 3);
+      for (const item of items) {
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (!file) continue;
+
+          // 处理图片 - 仅在此处检查 Vision 模型
+          if (item.type.startsWith("image/")) {
+            // **在这里添加 Vision 模型检查**
+            if (!isVisionModel(currentModel)) {
+              showToast("PasteImageNeedsVision"); // 提示用户需要 Vision 模型
+              continue; // 如果不是 Vision 模型，跳过此图片
             }
-            setAttachImages(images);
+
+            if (attachImages.length >= 3) {
+              showToast("UploadLimit");
+              continue; // 达到图片上限，跳过
+            }
+            fileProcessed = true; // 标记处理了文件
+            event.preventDefault(); // 阻止默认粘贴行为
+            setImageUploading(true);
+            try {
+              const dataUrl = await uploadImageRemote(file);
+              setAttachImages((prevImages) => [...prevImages, dataUrl].slice(0, 3)); // 添加并确保不超过3个
+            } catch (e) {
+              console.error("Error pasting image:", e);
+              showToast("UploadFailed");
+            } finally {
+              setImageUploading(false);
+            }
+          }
+          // 处理文本文件 - **此处不检查 Vision 模型**
+          else if (item.type.startsWith("text/")) {
+             if (attachFiles.length >= 3) {
+               showToast("UploadLimit");
+               continue; // 达到文件上限，跳过
+             }
+            fileProcessed = true; // 标记处理了文件
+            event.preventDefault(); // 阻止默认粘贴行为
+            setDocumentUploading(true);
+            try {
+              const dataUrl = await uploadFileRemote(file);
+              const fileData: UploadFile = { name: file.name, url: dataUrl };
+              const tokenCount = await countTokens(fileData); // 计算 token
+              fileData.tokenCount = tokenCount;
+              setAttachFiles((prevFiles) => [...prevFiles, fileData].slice(0, 3)); // 添加并确保不超过3个
+            } catch (e) {
+              console.error("Error pasting text file:", e);
+              showToast("UploadFailed");
+            } finally {
+              setDocumentUploading(false);
+            }
           }
         }
       }
     },
-    [attachImages, chatStore],
+    [attachImages, attachFiles, chatStore, setAttachImages, setAttachFiles, setImageUploading, setDocumentUploading],
   );
 
   async function uploadDocument() {
@@ -1585,11 +1606,9 @@ const [documentUploading, setDocumentUploading] = useState(false);
           fileInput.accept = "text/*"; // 限制为文本文件
           fileInput.multiple = true;
           fileInput.onchange = (event: any) => {
-            // 修改这里
             setDocumentUploading(true);
             const inputFiles = event.target.files;
             if (!inputFiles || inputFiles.length === 0) {
-              // 修改这里
               setDocumentUploading(false);
               rej(new Error("No files selected")); // 处理未选择文件的情况
               return;
@@ -1603,14 +1622,13 @@ const [documentUploading, setDocumentUploading] = useState(false);
             const filesToProcess = Math.min(inputFiles.length, remainingSlots);
 
             if (filesToProcess <= 0) {
-               // 修改这里
                setDocumentUploading(false);
-               showToast(Locale.Chat.UploadLimit); // 提示已达上限
+               showToast("UploadLimit"); // 提示已达上限
                res([]); // 返回空数组
                return;
             }
             if (inputFiles.length > remainingSlots) {
-               showToast(Locale.Chat.UploadLimit); // 提示部分文件因达到上限未添加
+               showToast("UploadLimit"); // 提示部分文件因达到上限未添加
             }
 
 
@@ -1666,7 +1684,7 @@ const [documentUploading, setDocumentUploading] = useState(false);
       setDocumentUploading(false); // 确保 loading 状态被重置
       if (error instanceof Error && error.message !== "File selection cancelled" && error.message !== "No files selected") {
          console.error("Error selecting files:", error);
-         showToast(Locale.Chat.UploadFailed); // 显示通用上传失败提示
+         showToast("UploadFailed"); // 显示通用上传失败提示
       }
     }
   }
