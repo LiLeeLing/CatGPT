@@ -54,8 +54,8 @@ export enum OUTPUT_FORMAT {
   // AUDIO_16KHZ_128KBITRATE_MONO_MP3 = "audio-16khz-128kbitrate-mono-mp3",
   // AUDIO_24KHZ_16BIT_24KBPS_MONO_OPUS = "audio-24khz-16bit-24kbps-mono-opus",
   // AUDIO_24KHZ_16BIT_48KBPS_MONO_OPUS = "audio-24khz-16bit-48kbps-mono-opus",
-  // AUDIO_24KHZ_48KBITRATE_MONO_MP3 = "audio-24khz-48kbitrate-mono-mp3",
-  // AUDIO_24KHZ_96KBITRATE_MONO_MP3 = "audio-24khz-96kbitrate-mono-mp3",
+  AUDIO_24KHZ_48KBITRATE_MONO_MP3 = "audio-24khz-48kbitrate-mono-mp3",
+  AUDIO_24KHZ_96KBITRATE_MONO_MP3 = "audio-24khz-96kbitrate-mono-mp3",
   // AUDIO_24KHZ_160KBITRATE_MONO_MP3 = "audio-24khz-160kbitrate-mono-mp3",
   // AUDIO_48KHZ_96KBITRATE_MONO_MP3 = "audio-48khz-96kbitrate-mono-mp3",
   // AUDIO_48KHZ_192KBITRATE_MONO_MP3 = "audio-48khz-192kbitrate-mono-mp3",
@@ -179,7 +179,7 @@ export class MsEdgeTTS {
                                         "sentenceBoundaryEnabled": "false",
                                         "wordBoundaryEnabled": "false"
                                     },
-                                    "outputFormat": "${this._outputFormat}"
+                                    "outputFormat": "${this._outputFormat}" 
                                 }
                             }
                         }
@@ -239,7 +239,7 @@ export class MsEdgeTTS {
                 <voice name="${this._voice}">
                     <prosody pitch="${options.pitch}" rate="${options.rate}" volume="${options.volume}">
                         ${input}
-                    </prosody>
+                    </prosody> 
                 </voice>
             </speak>`;
   }
