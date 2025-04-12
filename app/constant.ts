@@ -457,7 +457,7 @@ export const DEFAULT_TTS_VOICES = [
 
 // 新增: Edge-TTS 默认声音和列表
 export const DEFAULT_EDGE_TTS_VOICE = "zh-CN-XiaoshuangNeural"; // 选一个常见的作为默认值
-export const FINAL_SORTED_EDGE_TTS_VOICES = [
+export const DEFAULT_EDGE_TTS_VOICES = [
   // --- 简体中文 (zh-CN) ---
   // 女声
   "zh-CN-XiaoshuangNeural", // 萝莉/儿童
