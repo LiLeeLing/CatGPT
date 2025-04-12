@@ -1355,7 +1355,7 @@ if (!textContent) {
         // 设置元数据（声音和格式）
         await tts.setMetadata(
           edgeVoiceName,
-          OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3, // 你可以选择其他合适的格式
+          OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS, // 你可以选择其他合适的格式
         );
 
         // 准备韵律选项（音调和速率）
