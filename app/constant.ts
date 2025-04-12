@@ -457,59 +457,102 @@ export const DEFAULT_TTS_VOICES = [
 
 // 新增: Edge-TTS 默认声音和列表
 export const DEFAULT_EDGE_TTS_VOICE = "zh-CN-XiaoshuangNeural"; // 选一个常见的作为默认值
-export const DEFAULT_EDGE_TTS_VOICES = [
+export const FINAL_SORTED_EDGE_TTS_VOICES = [
   // --- 简体中文 (zh-CN) ---
-  "zh-CN-XiaoshuangNeural", // 萝莉
-  "zh-CN-XiaochenNeural", // 女声 (年轻，活泼)
-  "zh-CN-XiaohanNeural",  // 女声 (年轻，自然)
-  "zh-CN-XiaoxuanNeural", // 女声 (年轻，对话感)
-  "zh-CN-XiaomengNeural", // 女声 (年轻，新闻感)
-  "zh-CN-XiaoyiNeural",   // 女声 (较年轻，温柔)
-  "zh-CN-XiaoxiaoNeural", // 女声 (标准，略成熟)
-  "zh-CN-XiaoyanNeural",  // 女声 (标准，略成熟)
-  "zh-CN-YunyangNeural",  // 男声
-  "zh-CN-YunxiNeural",    // 男声
-  "zh-CN-YunjianNeural",  // 男声
-  "zh-CN-liaoning-XiaobeiNeural", // 女声 (辽宁)
-  "zh-CN-shaanxi-XiaoniNeural",   // 女声 (陕西)
-  "zh-CN-liaoning-YunbiaoNeural", // 男声 (辽宁)
-  "zh-CN-henan-YundengNeural", // 男声 (河南)
-  "zh-CN-shandong-YunxiangNeural", // 男声 (山东)
-  "zh-CN-sichuan-YunxiNeural", // 男声 (四川)
+  // 女声
+  "zh-CN-XiaoshuangNeural", // 萝莉/儿童
+  "zh-CN-XiaoyouNeural",    // 儿童
+  "zh-CN-XiaochenNeural",   // 年轻活泼
+  "zh-CN-XiaohanNeural",    // 年轻自然
+  "zh-CN-XiaoxuanNeural",   // 年轻对话感
+  "zh-CN-XiaoyiNeural",     // 年轻温柔
+  "zh-CN-XiaoqiuNeural",    // 年轻清新
+  "zh-CN-XiaorouNeural",    // 年轻温柔
+  "zh-CN-XiaomengNeural",   // 年轻新闻感
+  "zh-CN-XiaoxiaoNeural",   // 标准
+  "zh-CN-XiaoyanNeural",    // 标准
+  "zh-CN-liaoning-XiaobeiNeural", // 辽宁
+  "zh-CN-shaanxi-XiaoniNeural",   // 陕西
+  // 男声
+  "zh-CN-YunyangNeural",    // 男声
+  "zh-CN-YunxiNeural",      // 男声
+  "zh-CN-YunjianNeural",    // 男声
+  "zh-CN-YunfengNeural",    // 男声
+  "zh-CN-YunhaoNeural",     // 男声
+  "zh-CN-YunjieNeural",     // 男声
+  "zh-CN-YunxiaNeural",     // 男声
+  "zh-CN-YunyeNeural",      // 男声
+  "zh-CN-YunzeNeural",      // 男声
+  "zh-CN-henan-YundengNeural",    // 河南
+  "zh-CN-shandong-YunxiangNeural",// 山东
+  "zh-CN-sichuan-YunxiNeural",    // 四川
 
   // --- 繁体中文 (zh-TW/HK) ---
-  "zh-TW-HsiaoChenNeural", // 女声 (台湾)
-  "zh-TW-HsiaoYuNeural",   // 女声 (台湾)
-  "zh-HK-HiuMaanNeural",   // 女声 (香港)
-  "zh-HK-HiuGaaiNeural",   // 女声 (香港)
-  "zh-TW-YunJheNeural",    // 男声 (台湾)
-  "zh-HK-WanLungNeural",   // 男声 (香港)
+  // 女声
+  "zh-TW-HsiaoYuNeural",   // 台湾年轻
+  "zh-HK-HiuGaaiNeural",   // 香港活泼
+  "zh-TW-HsiaoChenNeural", // 台湾标准
+  "zh-HK-HiuMaanNeural",   // 香港标准
+  // 男声
+  "zh-TW-YunJheNeural",    // 台湾
+  "zh-HK-WanLungNeural",   // 香港
 
-
-
-  // --- 英文 (en-US / en-GB) ---
-  "en-US-JennyNeural",    // 女声 (美国, 通用)
-  "en-US-AriaNeural",     // 女声 (美国, 新闻/对话)
-  "en-GB-SoniaNeural",    // 女声 (英国)
-  "en-GB-LibbyNeural",    // 女声 (英国)
-  "en-US-GuyNeural",      // 男声 (美国)
-  "en-US-DavisNeural",    // 男声 (美国)
-  "en-GB-RyanNeural",     // 男声 (英国)
-
+  // --- 英文 (en-US / en-GB / en-AU / en-CA / en-IE) ---
+  // 女声
+  "en-US-AnaNeural",        // 美式儿童
+  "en-US-AriaNeural",       // 美式活泼/新闻
+  "en-US-EmmaMultilingualNeural", // 美式友好
+  "en-US-AvaMultilingualNeural",  // 美式明亮
+  "en-GB-LibbyNeural",      // 英式年轻
+  "en-GB-MaisieNeural",     // 英式友好
+  "en-US-JennyNeural",      // 美式标准
+  "en-GB-SoniaNeural",      // 英式标准
+  "en-AU-NatashaNeural",    // 澳式
+  "en-CA-ClaraNeural",      // 加式
+  "en-IE-EmilyNeural",      // 爱尔兰式
+  // 男声
+  "en-US-GuyNeural",        // 美式
+  "en-US-DavisNeural",      // 美式
+  "en-GB-RyanNeural",       // 英式
+  "en-GB-ThomasNeural",     // 英式
+  "en-AU-WilliamNeural",    // 澳式
+  "en-CA-LiamNeural",       // 加式
+  "en-IE-ConnorNeural",     // 爱尔兰式
 
   // --- 日文 (ja-JP) ---
-  "ja-JP-AoiNeural",      // 女声 (可爱/年轻)
-  "ja-JP-NanamiNeural",   // 女声 (标准)
+  // 女声
+  "ja-JP-AoiNeural",      // 可爱年轻
+  "ja-JP-MayuNeural",     // 年轻自然
+  "ja-JP-NanamiNeural",   // 标准
+  "ja-JP-ShioriNeural",   // 成熟冷静
+  // 男声
   "ja-JP-KeitaNeural",    // 男声
   "ja-JP-DaichiNeural",   // 男声
 
-  // --- 其他语言示例 (可选) ---
-  "ko-KR-SunHiNeural",    // 韩语 女声
-  "fr-FR-DeniseNeural",   // 法语 女声
-  "de-DE-KatjaNeural",    // 德语 女声
-  // 更多声音可以在 Edge TTS 文档中查找: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts
-];
+  // --- 韩语 (ko-KR) ---
+  // 女声
+  "ko-KR-JiMinNeural",    // 年轻活泼
+  "ko-KR-SunHiNeural",    // 标准
+  // 男声
+  "ko-KR-InJoonNeural",   // 男声
 
+  // --- 法语 (fr-FR) ---
+  // 女声
+  "fr-FR-EloiseNeural",   // 年轻甜美
+  "fr-FR-DeniseNeural",   // 标准
+  // 男声
+  "fr-FR-HenriNeural",    // 男声
+
+  // --- 德语 (de-DE) ---
+  // 女声
+  "de-DE-LouisaNeural",   // 年轻友好
+  "de-DE-KatjaNeural",    // 标准
+  // 男声
+  "de-DE-ConradNeural",   // 男声
+
+  // 更多声音可以在 Edge TTS / Azure Speech Service 文档中查找:
+  // https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts
+];
 export const VISION_MODEL_REGEXES = [
   /vision/,
   /gpt-4o/,
