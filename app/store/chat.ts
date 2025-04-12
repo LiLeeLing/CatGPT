@@ -411,7 +411,7 @@ import {
 
                     // attachFiles?: UploadFile[],
           // attachImages?: string[],
-          attachFiles?: UploadFile[], 
+          attachFiles?: UploadFile[],
           attachImages?: string[],
           isMcpResponse?: boolean,
         ) {
@@ -469,7 +469,7 @@ import {
 
            // 检查 messageContents 是否为空
            if (messageContents.length === 0) {
-             showToast(Locale.Chat.UploadButNoInput); // 或者其他提示
+             showToast("UploadButNoInput");
              return; // 不发送空消息
            }
 
