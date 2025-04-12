@@ -702,7 +702,7 @@ async getMessagesWithMemory(): Promise<RequestMessage[]> {
       currentMsgToken = estimateTokenLength(msg.content);
       msgToSend = { role: msg.role, content: msg.content };
     } else if (Array.isArray(msg.content)) {
-      let tempContent: MessageContent[] = [];
+      let tempContent: MultimodalContent[] = []; 
       for (const part of msg.content) {
         if (part.type === 'text') {
           currentMsgToken += estimateTokenLength(part.text ?? "");
