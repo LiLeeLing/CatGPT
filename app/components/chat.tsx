@@ -1135,7 +1135,7 @@ const [documentUploading, setDocumentUploading] = useState(false);
     }
     setIsLoading(true);
     chatStore
-      .onUserInput(userInput, attachImages, undefined, attachFiles)
+      .onUserInput(userInput, attachImages, attachFiles)
       .then(() => setIsLoading(false));
     setAttachImages([]);
     setAttachFiles([]);
