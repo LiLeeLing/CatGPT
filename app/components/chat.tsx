@@ -511,6 +511,7 @@ export function ChatActions(props: {
   hitBottom: boolean;
   imageUploading: boolean;
   documentUploading: boolean;
+  setImageUploading: (uploading: boolean) => void;
   setShowShortcutKeyModal: React.Dispatch<React.SetStateAction<boolean>>;
   setUserInput: (input: string) => void;
   setShowChatSidePanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -585,7 +586,7 @@ export function ChatActions(props: {
     setShowUploadImage(show);
     if (!show) {
       props.setAttachImages([]);
-      setImageUploading(false);
+      props.setImageUploading(false);
     }
 
     // if current model is not available
@@ -605,7 +606,10 @@ export function ChatActions(props: {
           : nextModel.name,
       );
     }
-  }, [chatStore, currentModel, models, session]);
+  }, [chatStore, currentModel, models, session, props.setAttachImages,
+    props.setImageUploading,
+  ]);
+
 
   return (
     <div className={styles["chat-input-actions"]}>
@@ -2277,6 +2281,7 @@ const [documentUploading, setDocumentUploading] = useState(false);
                 hitBottom={hitBottom}
                 imageUploading={imageUploading}
                 documentUploading={documentUploading}
+                setImageUploading={setImageUploading}
                     showPromptHints={() => {
                   // Click again to close
                   if (promptHints.length > 0) {
