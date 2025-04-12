@@ -585,7 +585,7 @@ export function ChatActions(props: {
     setShowUploadImage(show);
     if (!show) {
       props.setAttachImages([]);
-      props.setUploading(false);
+      props.setImageUploading(false);
     }
 
     // if current model is not available
