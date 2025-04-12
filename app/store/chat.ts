@@ -143,7 +143,7 @@ import {
       } else if (part.type === 'file_url') {
         // 与 getMessagesWithMemory 一致: 使用提供的 tokenCount 或默认值 (50)
         // 确保在 chat.tsx 上传时准确计算 tokenCount
-        totalTokens += part.file_url?.tokenCount ?? 50; // 如果 file_url 或 tokenCount 缺失，默认为 50 
+        totalTokens += part.file_url?.tokenCount ?? 50; // 如果 file_url 或 tokenCount 缺失，默认为 50
       }
     });
     return totalTokens;
@@ -411,7 +411,7 @@ import {
 
                     // attachFiles?: UploadFile[],
           // attachImages?: string[],
-          attachments?: UploadFile[],
+          attachFiles?: UploadFile[], 
           attachImages?: string[],
           isMcpResponse?: boolean,
         ) {
