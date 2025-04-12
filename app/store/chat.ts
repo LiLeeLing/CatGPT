@@ -702,7 +702,7 @@ async getMessagesWithMemory(): Promise<RequestMessage[]> {
       currentMsgToken = estimateTokenLength(msg.content);
       msgToSend = { role: msg.role, content: msg.content };
     } else if (Array.isArray(msg.content)) {
-      let tempContent: MultimodalContent[] = []; 
+      let tempContent: MultimodalContent[] = [];
       for (const part of msg.content) {
         if (part.type === 'text') {
           currentMsgToken += estimateTokenLength(part.text ?? "");
@@ -715,7 +715,7 @@ async getMessagesWithMemory(): Promise<RequestMessage[]> {
           }
         } else if (part.type === 'file_url') {
           // 总是计算文件 token，如果需要，稍后过滤
-          currentMsgToken += part.file_url.tokenCount ?? 50; // 使用存储的计数或默认值
+          currentMsgToken += part.file_url?.tokenCount ?? 50; // 使用存储的计数或默认值
           tempContent.push(part);
         }
       }
