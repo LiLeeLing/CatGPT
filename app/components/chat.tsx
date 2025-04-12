@@ -1022,7 +1022,7 @@ function _Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const { submitKey, shouldSubmit } = useSubmitHandler();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [hitBottom, setHitBottom] = useState(true); 
+  const [hitBottom, setHitBottom] = useState(true);
   const isScrolledToBottom = scrollRef?.current
     ? Math.abs(
         scrollRef.current.scrollHeight -
@@ -1725,12 +1725,12 @@ const [documentUploading, setDocumentUploading] = useState(false);
             if (filesToProcess <= 0) {
                // 修改这里
                setImageUploading(false);
-               showToast(Locale.Chat.UploadLimit);
+               showToast('UploadLimit');
                res([]);
                return;
             }
             if (inputFiles.length > remainingSlots) {
-               showToast(Locale.Chat.UploadLimit);
+               showToast('UploadLimit');
             }
 
             for (let i = 0; i < filesToProcess; i++) {
@@ -1777,11 +1777,10 @@ const [documentUploading, setDocumentUploading] = useState(false);
       // setAttachImages(images);
 
     } catch (error) {
-      // 修改这里
       setImageUploading(false);
       if (error instanceof Error && error.message !== "File selection cancelled" && error.message !== "No files selected") {
          console.error("Error selecting images:", error);
-         showToast(Locale.Chat.UploadFailed);
+         showToast('UploadFailed');
       }
     }
   }
