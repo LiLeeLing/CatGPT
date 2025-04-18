@@ -49,7 +49,8 @@ export interface MultimodalContent {
 export interface UploadFile {
   name: string;
   url: string;
-  mimeType?: string; // 添加 mimeType 属性
+  mimeType?: string; 
+  tokenCount?: number;
 }
 
 export interface MultimodalContentForAlibaba {
