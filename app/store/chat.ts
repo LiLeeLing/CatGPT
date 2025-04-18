@@ -879,6 +879,12 @@ async getMessagesWithMemory(): Promise<RequestMessage[]> {
             0,
             messages.length - modelConfig.historyMessageCount,
           );
+                    // --- 定义 topicMessages ---
+                    const topicMessages: ChatMessage[] = messages.slice(startIndex); // 获取最近的消息
+                    topicMessages.push(createMessage({ // 添加生成标题的指令
+                      role: "user",
+                      content: Locale.Store.Prompt.Topic,
+                    }));
               // --- 将 ChatMessage[] 转换为 RequestMessage[] 用于标题 API ---
               // 选项 A: 假设标题 API 只需要纯文本
               const finalTopicMessages: RequestMessage[] = topicMessages.map(msg => ({
