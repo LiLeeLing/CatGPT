@@ -452,7 +452,7 @@ import {
 
                       // 3. 处理文件附件 (attachFiles)
                       if (attachFiles && attachFiles.length > 0) {
-                        for (const file of attachFiles) {
+                        /*for (const file of attachFiles) {
                           // 使用 file_url 策略处理所有文件
                           messageContents.push({
                             type: "file_url",
@@ -464,7 +464,39 @@ import {
                           }
                         }
                       }
-                      // --- content 构建逻辑结束 ---
+                      // --- content 构建逻辑结束 ---*/
+                                              for (const file of attachFiles) {
+                                                // 检查文件类型
+                                                if (file.mimeType?.startsWith("text/")) {
+                                                  try {
+                                                    // 读取文本文件内容
+                                                    const fileContent = await readFileContent(file);
+                                                    // 将文件名和内容组合成文本消息部分
+                                                    messageContents.push({
+                                                      type: "text",
+                                                      text: `--- Start of File: ${file.name} ---\n\n${fileContent}\n\n--- End of File: ${file.name} ---`,
+                                                    });
+                                                    console.log(`Read content from text file: ${file.name}`);
+                                                  } catch (error) {
+                                                    console.error(`Error reading text file ${file.name}:`, error);
+                                                    // 读取失败时，可以添加一条错误提示文本，或者回退到 file_url (如果需要)
+                                                    messageContents.push({
+                                                      type: "text",
+                                                      text: `[Error reading file: ${file.name}]`,
+                                                    });
+                                                  }
+                                                } else {
+                                                  // 对于非文本文件，仍然使用 file_url 策略
+                                                  messageContents.push({
+                                                    type: "file_url",
+                                                    file_url: file,
+                                                  });
+                                                  if (file.tokenCount === undefined) {
+                                                     console.warn(`Token count for non-text file ${file.name} is undefined. Using default estimate.`);
+                                                  }
+                                                }
+                                              }
+                      
 
 
            // 检查 messageContents 是否为空
