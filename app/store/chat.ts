@@ -1027,7 +1027,7 @@ updateStat(message: ChatMessage, session: ChatSession) {
         tokenCount += 1000; // 一致的估算值
       } else if (part.type === 'file_url') {
         // charCount += `[File: ${part.file_url.name}]`.length; // 示例
-        tokenCount += part.file_url.tokenCount ?? 50; // 一致的估算值
+        tokenCount += part.file_url?.tokenCount ?? 50; // 一致的估算值
       }
     });
   }
