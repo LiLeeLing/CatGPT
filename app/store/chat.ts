@@ -1085,7 +1085,8 @@ updateStat(message: ChatMessage, session: ChatSession) {
                   get().onUserInput(
                     `\`\`\`json:mcp-response:${mcpRequest.clientId}\n${mcpResponse}\n\`\`\``,
                     [], // attachments 为空
-                    true,
+                    [], // attachImages 为空
+                    true, // isMcpResponse 为 true
                   );
                 })
                 .catch((error) => showToast("MCP execution failed", error));
