@@ -464,7 +464,7 @@ import {
                           }
                         }
                       }
-                      // --- content 构建逻辑结束 ---*/
+                      */
                                               for (const file of attachFiles) {
                                                 // 检查文件类型
                                                 if (file.mimeType?.startsWith("text/")) {
@@ -496,7 +496,8 @@ import {
                                                   }
                                                 }
                                               }
-                      
+                                          }
+
 
 
            // 检查 messageContents 是否为空
