@@ -837,13 +837,31 @@ async getMessagesWithMemory(): Promise<RequestMessage[]> {
           return;
         }
 
-        const [model, providerName] = modelConfig.compressModel
-          ? [modelConfig.compressModel, modelConfig.compressProviderName]
-          : getSummarizeModel(
-              session.mask.modelConfig.model,
-              session.mask.modelConfig.providerName,
-            );
-        const api: ClientApi = getClientApi(providerName as ServiceProvider);
+          let model: string;
+          let providerName: ServiceProvider;
+
+          if (modelConfig.compressModel) {
+            model = modelConfig.compressModel;
+            providerName = modelConfig.compressProviderName as ServiceProvider;
+          } else {
+            const currentProvider = session.mask.modelConfig.providerName;
+            switch (currentProvider) {
+              case ServiceProvider.Google:
+                default:
+                model = GEMINI_SUMMARIZE_MODEL;
+                providerName = ServiceProvider.Google;
+                break;
+              case ServiceProvider.DeepSeek:
+                model = DEEPSEEK_SUMMARIZE_MODEL;
+                providerName = ServiceProvider.DeepSeek;
+                break;
+              case ServiceProvider.OpenAI:
+                model = SUMMARIZE_MODEL;
+                providerName = ServiceProvider.OpenAI;
+                break;
+            }
+          }
+          const api: ClientApi = getClientApi(providerName); // providerName 已经是 ServiceProvider 类型
 
         const messages = session.messages;
 
