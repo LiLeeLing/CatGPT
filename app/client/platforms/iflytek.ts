@@ -64,220 +64,181 @@ export class SparkApi implements LLMApi {
     throw new Error("Method not implemented.");
   }
 
-  // --- 替换整个 chat 方法 ---
-    async chat(options: ChatOptions) {
-      // 讯飞星火当前似乎只处理文本，保持现有逻辑
-      const messages: ChatOptions["messages"] = [];
-      for (const v of options.messages) {
-        const content = getMessageTextContent(v); // 保持 getMessageTextContent 调用
-        messages.push({ role: v.role, content });
-      }
+  async chat(options: ChatOptions) {
+    const messages: ChatOptions["messages"] = [];
+    for (const v of options.messages) {
+      const content = getMessageTextContent(v);
+      messages.push({ role: v.role, content });
+    }
 
-      const modelConfig = {
-        ...useAppConfig.getState().modelConfig,
-        ...useChatStore.getState().currentSession().mask.modelConfig,
-        ...{
-          model: options.config.model,
-          providerName: options.config.providerName,
-        },
+    const modelConfig = {
+      ...useAppConfig.getState().modelConfig,
+      ...useChatStore.getState().currentSession().mask.modelConfig,
+      ...{
+        model: options.config.model,
+        providerName: options.config.providerName,
+      },
+    };
+
+    const requestPayload: RequestPayload = {
+      messages,
+      stream: options.config.stream,
+      model: modelConfig.model,
+      temperature: modelConfig.temperature,
+      presence_penalty: modelConfig.presence_penalty,
+      frequency_penalty: modelConfig.frequency_penalty,
+      top_p: modelConfig.top_p,
+      // max_tokens: Math.max(modelConfig.max_tokens, 1024),
+      // Please do not ask me why not send max_tokens, no reason, this param is just shit, I dont want to explain anymore.
+    };
+
+    console.log("[Request] Spark payload: ", requestPayload);
+
+    const shouldStream = !!options.config.stream;
+    const controller = new AbortController();
+    options.onController?.(controller);
+
+    try {
+      const chatPath = this.path(Iflytek.ChatPath);
+      const chatPayload = {
+        method: "POST",
+        body: JSON.stringify(requestPayload),
+        signal: controller.signal,
+        headers: getHeaders(),
       };
 
-      // 讯飞 API 的 payload 结构可能不同，这里假设类似 OpenAI
-      const requestPayload: RequestPayload = {
-        messages,
-        stream: options.config.stream,
-        model: modelConfig.model, // 需要确认 API 使用的字段名
-        temperature: modelConfig.temperature,
-        // presence_penalty: modelConfig.presence_penalty, // 确认支持
-        // frequency_penalty: modelConfig.frequency_penalty, // 确认支持
-        top_p: modelConfig.top_p, // 确认支持
-        // max_tokens: modelConfig.max_tokens, // 确认支持
-      };
+      // Make a fetch request
+      const requestTimeoutId = setTimeout(
+        () => controller.abort(),
+        REQUEST_TIMEOUT_MS,
+      );
 
-      console.log("[Request] Spark payload: ", requestPayload);
+      if (shouldStream) {
+        let responseText = "";
+        let remainText = "";
+        let finished = false;
+        let responseRes: Response;
 
-      const shouldStream = !!options.config.stream;
-      const controller = new AbortController();
-      options.onController?.(controller);
+        // Animate response text to make it look smooth
+        function animateResponseText() {
+          if (finished || controller.signal.aborted) {
+            responseText += remainText;
+            console.log("[Response Animation] finished");
+            return;
+          }
 
-      try {
-        const chatPath = this.path(Iflytek.ChatPath); // 确认路径
-        const chatPayload = {
-          method: "POST",
-          body: JSON.stringify(requestPayload),
-          signal: controller.signal,
-          headers: getHeaders(), // 可能需要特定的认证头
+          if (remainText.length > 0) {
+            const fetchCount = Math.max(1, Math.round(remainText.length / 60));
+            const fetchText = remainText.slice(0, fetchCount);
+            responseText += fetchText;
+            remainText = remainText.slice(fetchCount);
+            options.onUpdate?.(responseText, fetchText);
+          }
+
+          requestAnimationFrame(animateResponseText);
+        }
+
+        // Start animation
+        animateResponseText();
+
+        const finish = () => {
+          if (!finished) {
+            finished = true;
+            options.onFinish(responseText + remainText, responseRes);
+          }
         };
 
-        // Make a fetch request
-        const requestTimeoutId = setTimeout(
-          () => controller.abort(),
-          REQUEST_TIMEOUT_MS, // 使用默认超时或根据模型调整
-        );
+        controller.signal.onabort = finish;
 
-        if (shouldStream) {
-          let responseText = "";
-          let remainText = "";
-          let finished = false;
-          let responseRes: Response;
-
-          // Animate response text to make it look smooth
-          function animateResponseText() {
-            if (finished || controller.signal.aborted) {
-              responseText += remainText;
-              console.log("[Response Animation] finished");
-              if (responseText?.length === 0 && !controller.signal.aborted) {
-                 options.onError?.(new Error("empty response from server"));
-              }
-              return;
+        fetchEventSource(chatPath, {
+          fetch: fetch as any,
+          ...chatPayload,
+          async onopen(res) {
+            clearTimeout(requestTimeoutId);
+            const contentType = res.headers.get("content-type");
+            console.log("[Spark] request response content type: ", contentType);
+            responseRes = res;
+            if (contentType?.startsWith("text/plain")) {
+              responseText = await res.clone().text();
+              return finish();
             }
 
-            if (remainText.length > 0) {
-              const fetchCount = Math.max(1, Math.round(remainText.length / 60));
-              const fetchText = remainText.slice(0, fetchCount);
-              responseText += fetchText;
-              remainText = remainText.slice(fetchCount);
-              options.onUpdate?.(responseText, fetchText);
-            }
-
-            requestAnimationFrame(animateResponseText);
-          }
-
-          // Start animation
-          animateResponseText();
-
-          const finish = () => {
-            if (!finished) {
-              finished = true;
-              options.onFinish(responseText + remainText, responseRes);
-            }
-          };
-
-          controller.signal.onabort = finish;
-
-          fetchEventSource(chatPath, {
-            fetch: fetch as any, // Use global or imported fetch
-            ...chatPayload,
-            async onopen(res) {
-              clearTimeout(requestTimeoutId);
-              const contentType = res.headers.get("content-type");
-              console.log("[Spark] request response content type: ", contentType);
-              responseRes = res;
-
-              // Handle plain text or JSON error responses
-              if (contentType?.startsWith("text/plain") || contentType?.startsWith("application/json")) {
-                responseText = await res.clone().text();
-                try {
-                   const resJson = JSON.parse(responseText);
-                   // TODO: 确认讯飞 API 的错误结构
-                   if (resJson.header?.code !== 0) {
-                      console.error("[Spark API Error]", resJson);
-                      options.onError?.(new Error(resJson.header?.message || `Spark API Error Code: ${resJson.header?.code}`));
-                   }
-                } catch {
-                   // Not a JSON error
-                }
-                return finish();
-              }
-
-              // Handle stream errors
-              if (
-                !res.ok ||
-                !res.headers
-                  .get("content-type")
-                  ?.startsWith(EventStreamContentType) ||
-                res.status !== 200
-              ) {
-                let extraInfo = await res.clone().text();
-                try {
-                  const resJson = await res.clone().json();
-                  extraInfo = prettyObject(resJson);
-                  // TODO: 确认错误结构
-                  if (resJson.header?.code !== 0) {
-                     options.onError?.(new Error(resJson.header?.message || `Spark API Error Code: ${resJson.header?.code}`));
-                  }
-                } catch {}
-
-                if (res.status === 401) {
-                  extraInfo = Locale.Error.Unauthorized;
-                }
-
-                options.onError?.(
-                  new Error(
-                    `Request failed with status ${res.status}: ${extraInfo}`,
-                  ),
-                );
-                return finish();
-              }
-            },
-            onmessage(msg) {
-              // TODO: 确认讯飞 SSE 结束标志
-              if (/* msg.data === "[DONE]" || */ finished) {
-                // finish(); // Let onclose handle finish
-                return;
-              }
-              const text = msg.data;
+            // Handle different error scenarios
+            if (
+              !res.ok ||
+              !res.headers
+                .get("content-type")
+                ?.startsWith(EventStreamContentType) ||
+              res.status !== 200
+            ) {
+              let extraInfo = await res.clone().text();
               try {
-                const json = JSON.parse(text);
-                // TODO: 确认讯飞 SSE 响应结构
-                if (json.header?.code !== 0) {
-                   console.error("[Spark Stream Error]", json);
-                   options.onError?.(new Error(json.header?.message || `Spark API Error Code: ${json.header?.code}`));
-                   finish();
-                   return;
-                }
-                const choices = json.payload?.choices?.text as Array<{
-                  content: string;
-                  // role: string;
-                  // index: number;
-                }>;
-                const delta = choices?.map(c => c.content).join("") ?? "";
+                const resJson = await res.clone().json();
+                extraInfo = prettyObject(resJson);
+              } catch {}
 
-                if (delta) {
-                  remainText += delta;
-                }
-                // TODO: 确认讯飞流结束条件
-                if (json.header?.status === 2) {
-                   finish();
-                }
-              } catch (e) {
-                console.error("[Request] parse error", text, e);
-                // options.onError?.(new Error(`Failed to parse response: ${text}`));
+              if (res.status === 401) {
+                extraInfo = Locale.Error.Unauthorized;
               }
-            },
-            onclose() {
-              finish(); // Ensure finish is called
-            },
-            onerror(e) {
-              options.onError?.(e);
-              throw e; // Re-throw for fetchEventSource
-            },
-            openWhenHidden: true,
-          });
-        } else {
-          // Non-streaming request
-          const res = await fetch(chatPath, chatPayload); // Use global or imported fetch
-          clearTimeout(requestTimeoutId);
 
-          const resJson = await res.json();
+              options.onError?.(
+                new Error(
+                  `Request failed with status ${res.status}: ${extraInfo}`,
+                ),
+              );
+              return finish();
+            }
+          },
+          onmessage(msg) {
+            if (msg.data === "[DONE]" || finished) {
+              return finish();
+            }
+            const text = msg.data;
+            try {
+              const json = JSON.parse(text);
+              const choices = json.choices as Array<{
+                delta: { content: string };
+              }>;
+              const delta = choices[0]?.delta?.content;
 
-          // TODO: 确认讯飞 API 错误结构
-          if (resJson.header?.code !== 0) {
-             console.error("[Spark API Error]", resJson);
-             options.onError?.(new Error(resJson.header?.message || `Spark API Error Code: ${resJson.header?.code}`));
-             return;
-          }
+              if (delta) {
+                remainText += delta;
+              }
+            } catch (e) {
+              console.error("[Request] parse error", text);
+              options.onError?.(new Error(`Failed to parse response: ${text}`));
+            }
+          },
+          onclose() {
+            finish();
+          },
+          onerror(e) {
+            options.onError?.(e);
+            throw e;
+          },
+          openWhenHidden: true,
+        });
+      } else {
+        const res = await fetch(chatPath, chatPayload);
+        clearTimeout(requestTimeoutId);
 
-          // TODO: 确认讯飞非流式响应结构以提取消息
-          const message = this.extractMessage(resJson); // 可能需要调整 extractMessage
-          options.onFinish(message, res);
+        if (!res.ok) {
+          const errorText = await res.text();
+          options.onError?.(
+            new Error(`Request failed with status ${res.status}: ${errorText}`),
+          );
+          return;
         }
-      } catch (e) {
-        console.log("[Request] failed to make a chat request", e);
-        options.onError?.(e as Error);
+
+        const resJson = await res.json();
+        const message = this.extractMessage(resJson);
+        options.onFinish(message, res);
       }
+    } catch (e) {
+      console.log("[Request] failed to make a chat request", e);
+      options.onError?.(e as Error);
     }
-  
+  }
 
   async usage() {
     return {

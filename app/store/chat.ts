@@ -405,211 +405,220 @@ import {
           get().summarizeSession(false, targetSession);
         },
 
-async onUserInput(
-  userInputText: string, // 用户输入的文本
-  attachFiles?: UploadFile[],
-  attachImages?: string[],
-  isMcpResponse?: boolean,
-) {
-  const session = get().currentSession();
-  const modelConfig = session.mask.modelConfig;
-  const currentModel = modelConfig.model; // 获取当前模型名称
-  const modelIsVision = isVisionModel(currentModel); // 检查模型是否支持 Vision
+        async onUserInput(
 
-  const messageContents: MessageContent[] = [];
+          userInputText: string, // 用户输入的文本
 
-  // 1. 添加用户文本输入
-  if (userInputText && !isMcpResponse) {
-    const filledText = fillTemplateWith(userInputText, modelConfig);
-    messageContents.push({ type: "text", text: filledText });
-  } else if (userInputText && isMcpResponse) {
-    // MCP 响应直接使用文本
-    messageContents.push({ type: "text", text: userInputText });
-  }
+                    // attachFiles?: UploadFile[],
+          // attachImages?: string[],
+          attachFiles?: UploadFile[],
+          attachImages?: string[],
+          isMcpResponse?: boolean,
+        ) {
+          const session = get().currentSession();
+          const modelConfig = session.mask.modelConfig;
+          const currentModel = modelConfig.model; // 获取当前模型名称
+          const accessStore = useAccessStore.getState(); // 获取 access store
+          const configStore = useAppConfig.getState(); // 获取 config store
 
-  // 2. 处理图片附件 (attachImages) - 使用缓存 URL
-  if (attachImages && attachImages.length > 0) {
-    if (modelIsVision) {
-      attachImages.forEach(imageUrl => {
-        if (imageUrl && typeof imageUrl === 'string') {
-           // 直接使用上传后得到的缓存 URL
-           messageContents.push({ type: "image_url", image_url: { url: imageUrl } });
-        } else {
-           console.warn("Invalid image URL provided:", imageUrl);
-        }
-      });
-    } else {
-      console.warn(`Model ${currentModel} does not support images. Skipping images.`);
-      // 硬编码提示信息
-      messageContents.push({ type: "text", text: `[${attachImages.length} image(s) were uploaded but ignored as the current model doesn't support images]` });
-    }
-  }
+                      const messageContents: MessageContent[] = [];
+                      const modelIsVision = isVisionModel(currentModel); // 检查模型是否支持 Vision
 
-  // 3. 处理文件附件 (attachFiles)
-  if (attachFiles && attachFiles.length > 0) {
-    for (const file of attachFiles) {
-      // 检查文件类型
-      if (file.mimeType?.startsWith("text/")) {
-        try {
-          // 读取文本文件内容
-          const fileContent = await readFileContent(file);
-          // 将文件名和内容组合成文本消息部分
-          messageContents.push({
-            type: "text",
-            text: `--- Start of File: ${file.name} ---\n\n${fileContent}\n\n--- End of File: ${file.name} ---`,
-          });
-          console.log(`Read content from text file: ${file.name}`);
-        } catch (error) {
-          console.error(`Error reading text file ${file.name}:`, error);
-          // 硬编码错误提示文本
-          messageContents.push({
-            type: "text",
-            text: `[Error reading file: ${file.name}]`,
-          });
-        }
-      } else if (file.mimeType?.startsWith("image/") && modelIsVision) {
-         // 如果是图片且模型支持视觉，使用 image_url (与 attachImages 逻辑统一)
-         messageContents.push({
-           type: "image_url",
-           image_url: { url: file.url }, // 使用缓存 URL
-         });
-      } else {
-        // 对于所有其他类型文件（包括非视觉模型下的图片），总是使用 file_url
-        messageContents.push({
-          type: "file_url",
-          file_url: file, // 包含 url, name, tokenCount, mimeType 等
+                      // 1. 添加用户文本输入
+                      if (userInputText && !isMcpResponse) {
+                        const filledText = fillTemplateWith(userInputText, modelConfig);
+                        messageContents.push({ type: "text", text: filledText });
+                      } else if (userInputText && isMcpResponse) {
+                        // MCP 响应直接使用文本
+                        messageContents.push({ type: "text", text: userInputText });
+                      }
+
+                      // 2. 处理图片附件 (attachImages)
+                      if (attachImages && attachImages.length > 0) {
+                        if (modelIsVision) {
+                          attachImages.forEach(imageUrl => {
+                            // 确保 imageUrl 是有效的 base64 编码或 URL
+                            if (imageUrl && typeof imageUrl === 'string') {
+                               messageContents.push({ type: "image_url", image_url: { url: imageUrl } });
+                            } else {
+                               console.warn("Invalid image URL provided:", imageUrl);
+                            }
+                          });
+                        } else {
+                          console.warn(`Model ${currentModel} does not support images. Skipping images.`);
+                          messageContents.push({ type: "text", text: `[${attachImages.length} image(s) were uploaded but ignored as the current model doesn't support images]` });
+                        }
+                      }
+
+                      // 3. 处理文件附件 (attachFiles)
+                      if (attachFiles && attachFiles.length > 0) {
+                        /*for (const file of attachFiles) {
+                          // 使用 file_url 策略处理所有文件
+                          messageContents.push({
+                            type: "file_url",
+                            file_url: file, // 包含 url, name, tokenCount, mimeType 等
+                          });
+                          // 确保 file.tokenCount 在 chat.tsx 上传时已计算并填充
+                          if (file.tokenCount === undefined) {
+                             console.warn(`Token count for file ${file.name} is undefined. Using default estimate.`);
+                          }
+                        }
+                      }
+                      */
+                                              for (const file of attachFiles) {
+                                                // 检查文件类型
+                                                if (file.mimeType?.startsWith("text/")) {
+                                                  try {
+                                                    // 读取文本文件内容
+                                                    const fileContent = await readFileContent(file);
+                                                    // 将文件名和内容组合成文本消息部分
+                                                    messageContents.push({
+                                                      type: "text",
+                                                      text: `--- Start of File: ${file.name} ---\n\n${fileContent}\n\n--- End of File: ${file.name} ---`,
+                                                    });
+                                                    console.log(`Read content from text file: ${file.name}`);
+                                                  } catch (error) {
+                                                    console.error(`Error reading text file ${file.name}:`, error);
+                                                    // 读取失败时，可以添加一条错误提示文本，或者回退到 file_url (如果需要)
+                                                    messageContents.push({
+                                                      type: "text",
+                                                      text: `[Error reading file: ${file.name}]`,
+                                                    });
+                                                  }
+                                                } else {
+                                                  // 对于非文本文件，仍然使用 file_url 策略
+                                                  messageContents.push({
+                                                    type: "file_url",
+                                                    file_url: file,
+                                                  });
+                                                  if (file.tokenCount === undefined) {
+                                                     console.warn(`Token count for non-text file ${file.name} is undefined. Using default estimate.`);
+                                                  }
+                                                }
+                                              }
+                                          }
+
+
+
+           // 检查 messageContents 是否为空
+           if (messageContents.length === 0) {
+             showToast("UploadButNoInput");
+             return; // 不发送空消息
+           }
+
+           // --- 创建消息对象 ---
+           const userMessage: ChatMessage = createMessage({
+             role: "user",
+             content: messageContents, // 使用构建好的数组
+             isMcpResponse,
+           });
+
+           const botMessage: ChatMessage = createMessage({
+             role: "assistant",
+             streaming: true,
+             model: modelConfig.model,
+           });
+
+           // get recent messages
+           const recentMessages = await get().getMessagesWithMemory(); // This now returns RequestMessage[]
+           const sendMessages = recentMessages.concat(userMessage as RequestMessage); // Cast or ensure type compatibility
+
+           // save user's and bot's message
+           get().updateTargetSession(session, (session) => {
+             session.messages = session.messages.concat([userMessage, botMessage]);
+           });
+
+
+        const api: ClientApi = getClientApi(modelConfig.providerName);
+
+        // --- 发起 API 请求 ---
+        // 传递给 api.llm.chat 的 messages 数组现在包含了 content 为数组的消息
+        api.llm.chat({
+          messages: sendMessages, // sendMessages 包含结构化 content
+          config: { ...modelConfig, stream: true },
+          onUpdate(message) {
+            botMessage.streaming = true;
+            if (message) {
+              // 假设 API 返回的仍然是文本内容
+              botMessage.content = message;
+            }
+            get().updateTargetSession(session, (session) => {
+              session.messages = session.messages.concat();
+            });
+          },
+          async onFinish(message) {
+            botMessage.streaming = false;
+            if (message) {
+              botMessage.content = message;
+              botMessage.date = new Date().toLocaleString();
+              // 注意：onNewMessage 可能也需要调整以处理 content 数组（如果需要统计 token 等）
+              get().onNewMessage(botMessage, session);
+            }
+            ChatControllerPool.remove(session.id, botMessage.id);
+          },
+          // ... (onBeforeTool, onAfterTool, onError, onController 保持不变)
+          onBeforeTool(tool: ChatMessageTool) {
+            (botMessage.tools = botMessage?.tools || []).push(tool);
+            get().updateTargetSession(session, (session) => {
+              session.messages = session.messages.concat();
+            });
+          },
+          onAfterTool(tool: ChatMessageTool) {
+            botMessage?.tools?.forEach((t, i, tools) => {
+              if (tool.id == t.id) {
+                tools[i] = { ...tool };
+              }
+            });
+            get().updateTargetSession(session, (session) => {
+              session.messages = session.messages.concat();
+            });
+          },
+          onError(error) {
+            const isAborted = error.message?.includes?.("aborted");
+            // 假设错误信息仍然附加到文本 content
+            const errorContent =
+              "\n\n" +
+              prettyObject({
+                error: true,
+                message: error.message,
+              });
+            if (typeof botMessage.content === "string") {
+              botMessage.content += errorContent;
+            } else {
+              // 如果 botMessage.content 也是数组，需要找到 text 部分添加
+              const textPart = botMessage.content.find(
+                (p) => p.type === "text",
+              ) as TextContent | undefined;
+              if (textPart) {
+                textPart.text += errorContent;
+              } else {
+                // 如果没有 text 部分，则添加一个新的 text 部分
+                (botMessage.content as MessageContent[]).push({
+                  type: "text",
+                  text: errorContent,
+                });
+              }
+            }
+
+            botMessage.streaming = false;
+            userMessage.isError = !isAborted;
+            botMessage.isError = !isAborted;
+            get().updateTargetSession(session, (session) => {
+              session.messages = session.messages.concat();
+            });
+            ChatControllerPool.remove(session.id, botMessage.id);
+
+            console.error("[Chat] failed ", error);
+          },
+          onController(controller) {
+            ChatControllerPool.addController(
+              session.id,
+              botMessage.id, // 确保 botMessage.id 存在
+              controller,
+            );
+          },
         });
-        // 确保 file.tokenCount 在上传时已计算或估算
-        if (file.tokenCount === undefined) {
-           console.warn(`Token count for file ${file.name} is undefined. Using default estimate.`);
-           // 可以在这里赋一个默认值，但最好在上传时处理
-           // file.tokenCount = 50; // 示例默认值
-        }
-      }
-    }
-  }
-
-  // 检查 messageContents 是否为空 (如果没有文本输入且所有附件都被忽略)
-  // 注意: showToast 仍然可能使用 Locale，但这超出了 messageContents 的范围
-  if (messageContents.length === 0 && !userInputText) { // 确保即使有文本输入但为空字符串时也能发送
-    showToast("UploadButNoInput"); // 保持 showToast 不变，因为它不是聊天消息的一部分
-    return; // 不发送空消息
-  }
-
-  // --- 创建消息对象 ---
-  const userMessage: ChatMessage = createMessage({
-    role: "user",
-    content: messageContents, // 使用构建好的数组
-    isMcpResponse,
-  });
-
-  const botMessage: ChatMessage = createMessage({
-    role: "assistant",
-    streaming: true,
-    model: modelConfig.model,
-  });
-
-  // get recent messages
-  const recentMessages = await get().getMessagesWithMemory(); // This now returns RequestMessage[]
-  const sendMessages = recentMessages.concat(userMessage as RequestMessage); // Cast or ensure type compatibility
-
-  // save user's and bot's message
-  get().updateTargetSession(session, (session) => {
-    session.messages = session.messages.concat([userMessage, botMessage]);
-  });
-
-
-  const api: ClientApi = getClientApi(modelConfig.providerName);
-
-  // --- 发起 API 请求 ---
-  // 传递给 api.llm.chat 的 messages 数组现在包含了 content 为数组的消息
-  api.llm.chat({
-    messages: sendMessages, // sendMessages 包含结构化 content
-    config: { ...modelConfig, stream: true },
-    onUpdate(message) {
-      botMessage.streaming = true;
-      if (message) {
-        // 假设 API 返回的仍然是文本内容
-        botMessage.content = message;
-      }
-      get().updateTargetSession(session, (session) => {
-        session.messages = session.messages.concat();
-      });
-    },
-    async onFinish(message, responseRes) { // 接收 responseRes
-      botMessage.streaming = false;
-      if (message) {
-        botMessage.content = message;
-        botMessage.date = new Date().toLocaleString();
-        // 注意：onNewMessage 可能也需要调整以处理 content 数组（如果需要统计 token 等）
-        get().onNewMessage(botMessage, session);
-      }
-      ChatControllerPool.remove(session.id, botMessage.id);
-    },
-    // ... (onBeforeTool, onAfterTool, onError, onController 保持不变)
-    onBeforeTool(tool: ChatMessageTool) {
-      (botMessage.tools = botMessage?.tools || []).push(tool);
-      get().updateTargetSession(session, (session) => {
-        session.messages = session.messages.concat();
-      });
-    },
-    onAfterTool(tool: ChatMessageTool) {
-      botMessage?.tools?.forEach((t, i, tools) => {
-        if (tool.id == t.id) {
-          tools[i] = { ...tool };
-        }
-      });
-      get().updateTargetSession(session, (session) => {
-        session.messages = session.messages.concat();
-      });
-    },
-    onError(error) {
-      const isAborted = error.message?.includes?.("aborted");
-      // 假设错误信息仍然附加到文本 content
-      const errorContent =
-        "\n\n" +
-        prettyObject({
-          error: true,
-          message: error.message,
-        });
-      if (typeof botMessage.content === "string") {
-        botMessage.content += errorContent;
-      } else {
-        // 如果 botMessage.content 也是数组，需要找到 text 部分添加
-        const textPart = botMessage.content.find(
-          (p) => p.type === "text",
-        ) as TextContent | undefined;
-        if (textPart) {
-          textPart.text += errorContent;
-        } else {
-          // 如果没有 text 部分，则添加一个新的 text 部分
-          (botMessage.content as MessageContent[]).push({
-            type: "text",
-            text: errorContent,
-          });
-        }
-      }
-
-      botMessage.streaming = false;
-      userMessage.isError = !isAborted;
-      botMessage.isError = !isAborted;
-      get().updateTargetSession(session, (session) => {
-        session.messages = session.messages.concat();
-      });
-      ChatControllerPool.remove(session.id, botMessage.id);
-
-      console.error("[Chat] failed ", error);
-    },
-    onController(controller) {
-      ChatControllerPool.addController(
-        session.id,
-        botMessage.id, // 确保 botMessage.id 存在
-        controller,
-      );
-    },
-  });
-},
-
+      },
 
 
         getMemoryPrompt() {

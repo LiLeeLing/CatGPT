@@ -21,8 +21,6 @@ import {
   getMessageTextContent,
   getMessageTextContentWithoutThinking,
   getTimeoutMSByModel,
-  isVisionModel, // 引入视觉模型检查
-  MultimodalContent, // 引入类型
 } from "@/app/utils";
 import { RequestPayload } from "./openai";
 import { fetch } from "@/app/utils/stream";
@@ -65,130 +63,45 @@ export class DeepSeekApi implements LLMApi {
     throw new Error("Method not implemented.");
   }
 
-    async chat(options: ChatOptions) {
-      // --- 修改开始 ---
-      // const messages: ChatOptions["messages"] = [];
-      // for (const v of options.messages) {
-      //   if (v.role === "assistant") {
-      //     const content = getMessageTextContentWithoutThinking(v);
-      //     messages.push({ role: v.role, content });
-      //   } else {
-      //     const content = getMessageTextContent(v);
-      //     messages.push({ role: v.role, content });
-      //   }
-      // }
-      const messages: RequestPayload["messages"] = [];
-      const visionModel = isVisionModel(options.config.model); // 检查是否为 DeepSeek-VL 等视觉模型
-
-      for (const v of options.messages) {
-        let processedContent: string | MultimodalContent[];
-
-        if (v.role === "assistant") {
-          // 助手消息通常只有文本（或工具调用），处理 thinking 状态
-          processedContent = getMessageTextContentWithoutThinking(v);
-        } else if (typeof v.content === 'string') {
-          processedContent = v.content;
-        } else {
-          // 处理 MultimodalContent[]
-          if (visionModel) {
-            // 如果是视觉模型，理论上可以处理图片
-            // 但 DeepSeek Chat API 对多模态输入的格式尚不明确，暂时也使用占位符
-            // TODO: 确认 DeepSeek API 对图片的具体格式要求 (Base64 or URL?)
-            const parts: MultimodalContent[] = [];
-            for (const part of v.content) {
-              if (part.type === 'text') {
-                parts.push(part);
-              } else if (part.type === 'image_url') {
-                // 假设需要 Base64，但 API 不明确，先用占位符
-                // const base64DataUrl = await cacheImageToBase64Image(part.image_url.url);
-                // parts.push({ type: 'image_url', image_url: { url: base64DataUrl } }); // 假设格式
-                parts.push({ type: 'text', text: "[图片]" }); // 临时占位符
-              } else if (part.type === 'file_url') {
-                const fileName = part.file_url?.name ?? '未知文件';
-                parts.push({ type: 'text', text: `[文件: ${fileName}]` }); // 文件占位符
-              }
-            }
-            // 如果只有文本部分，简化为字符串
-            if (parts.every(p => p.type === 'text')) {
-               processedContent = parts.map(p => p.text ?? "").join("\n");
-            } else {
-               // 如果 API 明确支持 OpenAI 格式，可以直接用 parts
-               // processedContent = parts;
-               // 否则，合并文本和占位符
-               processedContent = parts.map(p => {
-                  if (p.type === 'text') return p.text ?? "";
-                  if (p.type === 'image_url') return "[图片]"; // 再次确认占位符
-                  if (p.type === 'file_url') {
-                     const fileName = p.file_url?.name ?? '未知文件';
-                     return `[文件: ${fileName}]`;
-                  }
-                  return "";
-               }).join("\n");
-            }
-          } else {
-            // 非视觉模型，提取文本并添加占位符
-            const textParts = v.content
-              .map(part => {
-                if (part.type === 'text') {
-                  return part.text ?? "";
-                } else if (part.type === 'image_url') {
-                  return "[图片]";
-                } else if (part.type === 'file_url') {
-                  const fileName = part.file_url?.name ?? '未知文件';
-                  return `[文件: ${fileName}]`;
-                }
-                return "";
-              })
-              .join("\n");
-            processedContent = textParts;
-          }
-        }
-        // 确保 content 最终是字符串或 OpenAI 兼容的数组
-        // DeepSeek API 似乎期望 content 是字符串，所以这里统一转字符串
-        if (Array.isArray(processedContent)) {
-           processedContent = processedContent.map(p => {
-              if (p.type === 'text') return p.text ?? "";
-              if (p.type === 'image_url') return "[图片]";
-              if (p.type === 'file_url') {
-                 const fileName = p.file_url?.name ?? '未知文件';
-                 return `[文件: ${fileName}]`;
-              }
-              return "";
-           }).join("\n");
-        }
-        messages.push({ role: v.role, content: processedContent });
+  async chat(options: ChatOptions) {
+    const messages: ChatOptions["messages"] = [];
+    for (const v of options.messages) {
+      if (v.role === "assistant") {
+        const content = getMessageTextContentWithoutThinking(v);
+        messages.push({ role: v.role, content });
+      } else {
+        const content = getMessageTextContent(v);
+        messages.push({ role: v.role, content });
       }
-      // --- 修改结束 ---
+    }
 
+    // 检测并修复消息顺序，确保除system外的第一个消息是user
+    const filteredMessages: ChatOptions["messages"] = [];
+    let hasFoundFirstUser = false;
 
-      // 检测并修复消息顺序，确保除system外的第一个消息是user (保持不变)
-      const filteredMessages: RequestPayload["messages"] = [];
-      let hasFoundFirstUser = false;
-
-      for (const msg of messages) {
-        if (msg.role === "system") {
-          // Keep all system messages
-          filteredMessages.push(msg);
-        } else if (msg.role === "user") {
-          // User message directly added
-          filteredMessages.push(msg);
-          hasFoundFirstUser = true;
-        } else if (hasFoundFirstUser) {
-          // After finding the first user message, all subsequent non-system messages are retained.
-          filteredMessages.push(msg);
-        }
-        // If hasFoundFirstUser is false and it is not a system message, it will be skipped.
+    for (const msg of messages) {
+      if (msg.role === "system") {
+        // Keep all system messages
+        filteredMessages.push(msg);
+      } else if (msg.role === "user") {
+        // User message directly added
+        filteredMessages.push(msg);
+        hasFoundFirstUser = true;
+      } else if (hasFoundFirstUser) {
+        // After finding the first user message, all subsequent non-system messages are retained.
+        filteredMessages.push(msg);
       }
+      // If hasFoundFirstUser is false and it is not a system message, it will be skipped.
+    }
 
-      const modelConfig = {
-        ...useAppConfig.getState().modelConfig,
-        ...useChatStore.getState().currentSession().mask.modelConfig,
-        ...{
-          model: options.config.model,
-          providerName: options.config.providerName,
-        },
-      };
-
+    const modelConfig = {
+      ...useAppConfig.getState().modelConfig,
+      ...useChatStore.getState().currentSession().mask.modelConfig,
+      ...{
+        model: options.config.model,
+        providerName: options.config.providerName,
+      },
+    };
 
     const requestPayload: RequestPayload = {
       messages: filteredMessages,
