@@ -17,8 +17,8 @@ import {
   SpeechOptions,
 } from "../api";
 import { getClientConfig } from "@/app/config/client";
-import { getTimeoutMSByModel } from "@/app/utils";
-import { preProcessImageContent } from "@/app/utils/chat";
+import { getTimeoutMSByModel, MultimodalContent, isVisionModel } from "@/app/utils"; // 引入 MultimodalContent, isVisionModel
+// import { preProcessImageContent } from "@/app/utils/chat"; // 移除旧的预处理
 import { RequestPayload } from "./openai";
 import { fetch } from "@/app/utils/stream";
 
@@ -61,10 +61,45 @@ export class XAIApi implements LLMApi {
   }
 
   async chat(options: ChatOptions) {
-    const messages: ChatOptions["messages"] = [];
+    // const messages: ChatOptions["messages"] = [];
+    // for (const v of options.messages) {
+    //   const content = await preProcessImageContent(v.content); // 旧的预处理
+    //   messages.push({ role: v.role, content });
+    // }
+    const messages: RequestPayload["messages"] = [];
+    // XAI 模型目前主要处理文本，我们假设它还不支持直接的图片或文件输入
+    // 因此，我们将提取文本内容，并为非文本内容添加占位符
+    // const isVision = isVisionModel(options.config.model); // 检查是否是视觉模型 (XAI 当前无)
+    const isVision = false; // 明确假设 XAI 当前模型不支持视觉/文件
+
     for (const v of options.messages) {
-      const content = await preProcessImageContent(v.content);
-      messages.push({ role: v.role, content });
+      let processedContent: string | MultimodalContent[]; // 类型保持，但实际只用 string
+      if (typeof v.content === 'string') {
+        processedContent = v.content;
+      } else {
+        // 处理 MultimodalContent[]
+        const textParts = v.content
+          .map(part => {
+            if (part.type === 'text') {
+              return part.text ?? "";
+            } else if (part.type === 'image_url') {
+              return "[图片]"; // 为图片添加占位符
+            } else if (part.type === 'file_url') {
+              // 尝试获取文件名，如果 file_url 或 name 不存在，则使用默认值
+              const fileName = part.file_url?.name ?? '未知文件';
+              return `[文件: ${fileName}]`; // 为文件添加占位符
+            }
+            return ""; // 忽略其他未知的 part 类型
+          })
+          .join("\n"); // 用换行符合并文本和占位符
+        processedContent = textParts;
+      }
+      // 确保 content 最终是字符串
+      if (typeof processedContent !== 'string') {
+         console.warn("[XAI] Processed content is not a string, converting.", processedContent);
+         processedContent = String(processedContent); // 强制转换，虽然理论上不应发生
+      }
+      messages.push({ role: v.role, content: processedContent });
     }
 
     const modelConfig = {
@@ -75,6 +110,7 @@ export class XAIApi implements LLMApi {
         providerName: options.config.providerName,
       },
     };
+
 
     const requestPayload: RequestPayload = {
       messages,

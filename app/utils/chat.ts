@@ -12,103 +12,66 @@ import {
 import { prettyObject } from "./format";
 import { fetch as tauriFetch } from "./stream";
 
-export function compressImage(file: Blob, maxSize: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (readerEvent: any) => {
-      const image = new Image();
-      image.onload = () => {
-        let canvas = document.createElement("canvas");
-        let ctx = canvas.getContext("2d");
-        let width = image.width;
-        let height = image.height;
-        let quality = 0.9;
-        let dataUrl;
-
-        do {
-          canvas.width = width;
-          canvas.height = height;
-          ctx?.clearRect(0, 0, canvas.width, canvas.height);
-          ctx?.drawImage(image, 0, 0, width, height);
-          dataUrl = canvas.toDataURL("image/jpeg", quality);
-
-          if (dataUrl.length < maxSize) break;
-
-          if (quality > 0.5) {
-            // Prioritize quality reduction
-            quality -= 0.1;
-          } else {
-            // Then reduce the size
-            width *= 0.9;
-            height *= 0.9;
-          }
-        } while (dataUrl.length > maxSize);
-
-        resolve(dataUrl);
-      };
-      image.onerror = reject;
-      image.src = readerEvent.target.result;
-    };
-    reader.onerror = reject;
-
-    if (file.type.includes("heic")) {
-      try {
-        const heic2any = require("heic2any");
-        heic2any({ blob: file, toType: "image/jpeg" })
-          .then((blob: Blob) => {
-            reader.readAsDataURL(blob);
-          })
-          .catch((e: any) => {
-            reject(e);
-          });
-      } catch (e) {
-        reject(e);
-      }
-    }
-
-    reader.readAsDataURL(file);
-  });
-}
-
-export async function preProcessImageContentBase(
+// --- 插入以下新函数 ---
+/**
+ * 统一预处理函数：将消息内容中的缓存 URL 转换为 Base64 Data URL。
+ * @param content 消息内容
+ * @returns 处理后的消息内容
+ */
+export async function preProcessMultimodalContent(
   content: RequestMessage["content"],
-  transformImageUrl: (url: string) => Promise<{ [key: string]: any }>,
-) {
+): Promise<string | MultimodalContent[]> {
   if (typeof content === "string") {
     return content;
   }
-  const result = [];
-  for (const part of content) {
-    if (part?.type == "image_url" && part?.image_url?.url) {
+
+  const processedContent: MultimodalContent[] = [];
+  for (const item of content) {
+    if (item.type === "image_url" && item.image_url?.url?.startsWith(CACHE_URL_PREFIX)) {
       try {
-        const url = await cacheImageToBase64Image(part?.image_url?.url);
-        result.push(await transformImageUrl(url));
+        // 调用函数获取 Base64 Data URL
+        const base64DataUrl = await cacheImageToBase64Image(item.image_url.url);
+        processedContent.push({
+          type: "image_url",
+          image_url: {
+            url: base64DataUrl, // URL 现在是 Base64
+          },
+        });
       } catch (error) {
-        console.error("Error processing image URL:", error);
+        console.error("[Chat] Error processing cached image:", item.image_url.url, error);
+        // 处理错误，例如替换为错误提示文本
+        processedContent.push({
+          type: "text",
+          text: `[Error processing image: ${item.image_url.url}]`,
+        });
       }
-    } else {
-      result.push({ ...part });
+    } else if (item.type === "file_url" && item.file_url?.url?.startsWith(CACHE_URL_PREFIX)) {
+        // TODO: 文件处理逻辑 - 根据目标平台和文件类型决定
+        // 示例：暂时将文件表示为文本提示
+        console.warn("[Chat] File processing not fully implemented yet:", item.file_url.name);
+        processedContent.push({
+            type: "text",
+            text: `[Attached file: ${item.file_url.name} - content processing pending]`
+        });
+        // 未来可能需要:
+        // 1. 获取文件的 Base64: const base64DataUrl = await cacheMediaToBase64(item.file_url.url, item.file_url.mimeType);
+        // 2. 或获取公网 URL (如果 uploadMedia 支持): const publicUrl = await getPublicUrlForCache(item.file_url.url);
+        // processedContent.push({ ...item, file_url: { ...item.file_url, url: base64DataUrl or publicUrl } });
+    }
+     else {
+      // 保留非缓存 URL (例如已经是 Base64 或公网 URL) 或纯文本部分
+      processedContent.push(item);
     }
   }
-  return result;
+
+  // 优化：如果只有一个文本部分，则返回字符串
+  if (processedContent.length === 1 && processedContent[0].type === "text") {
+    return processedContent[0].text ?? "";
+  }
+
+  return processedContent;
 }
 
-export async function preProcessImageContent(
-  content: RequestMessage["content"],
-) {
-  return preProcessImageContentBase(content, async (url) => ({
-    type: "image_url",
-    image_url: { url },
-  })) as Promise<MultimodalContent[] | string>;
-}
-
-export async function preProcessImageContentForAlibabaDashScope(
-  content: RequestMessage["content"],
-) {
-  return preProcessImageContentBase(content, async (url) => ({
-    image: url,
-  }));
-}
 
 const imageCaches: Record<string, string> = {};
 export function cacheImageToBase64Image(imageUrl: string) {

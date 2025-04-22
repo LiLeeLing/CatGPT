@@ -18,7 +18,7 @@ import {
 } from "@/app/store";
 import { collectModelsWithDefaultModel } from "@/app/utils/model";
 import {
-  preProcessImageContent,
+  preProcessMultimodalContent,
   uploadImage,
   base64Image2Blob,
   streamWithThink,
@@ -183,234 +183,292 @@ export class ChatGPTApi implements LLMApi {
     }
   }
 
-  async chat(options: ChatOptions) {
-    const modelConfig = {
-      ...useAppConfig.getState().modelConfig,
-      ...useChatStore.getState().currentSession().mask.modelConfig,
-      ...{
-        model: options.config.model,
-        providerName: options.config.providerName,
-      },
-    };
-
-    let requestPayload: RequestPayload | DalleRequestPayload;
-
-    const isDalle3 = _isDalle3(options.config.model);
-    const isO1OrO3 =
-      options.config.model.startsWith("o1") ||
-      options.config.model.startsWith("o3");
-    if (isDalle3) {
-      const prompt = getMessageTextContent(
-        options.messages.slice(-1)?.pop() as any,
-      );
-      requestPayload = {
-        model: options.config.model,
-        prompt,
-        // URLs are only valid for 60 minutes after the image has been generated.
-        response_format: "b64_json", // using b64_json, and save image in CacheStorage
-        n: 1,
-        size: options.config?.size ?? "1024x1024",
-        quality: options.config?.quality ?? "standard",
-        style: options.config?.style ?? "vivid",
-      };
-    } else {
-      const visionModel = isVisionModel(options.config.model);
-      const messages: ChatOptions["messages"] = [];
-      for (const v of options.messages) {
-        const content = visionModel
-          ? await preProcessImageContent(v.content)
-          : getMessageTextContent(v);
-        if (!(isO1OrO3 && v.role === "system"))
-          messages.push({ role: v.role, content });
-      }
-
-      // O1 not support image, tools (plugin in ChatGPTNextWeb) and system, stream, logprobs, temperature, top_p, n, presence_penalty, frequency_penalty yet.
-      requestPayload = {
-        messages,
-        stream: options.config.stream,
-        model: modelConfig.model,
-        temperature: !isO1OrO3 ? modelConfig.temperature : 1,
-        presence_penalty: !isO1OrO3 ? modelConfig.presence_penalty : 0,
-        frequency_penalty: !isO1OrO3 ? modelConfig.frequency_penalty : 0,
-        top_p: !isO1OrO3 ? modelConfig.top_p : 1,
-        // max_tokens: Math.max(modelConfig.max_tokens, 1024),
-        // Please do not ask me why not send max_tokens, no reason, this param is just shit, I dont want to explain anymore.
+    async chat(options: ChatOptions) {
+      const modelConfig = {
+        ...useAppConfig.getState().modelConfig,
+        ...useChatStore.getState().currentSession().mask.modelConfig,
+        ...{
+          model: options.config.model,
+          providerName: options.config.providerName,
+        },
       };
 
-      // O1 使用 max_completion_tokens 控制token数 (https://platform.openai.com/docs/guides/reasoning#controlling-costs)
-      if (isO1OrO3) {
-        requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
-      }
+      let requestPayload: RequestPayload | DalleRequestPayload;
 
-      // add max_tokens to vision model
-      if (visionModel) {
-        requestPayload["max_tokens"] = Math.max(modelConfig.max_tokens, 4000);
-      }
-    }
+      const isDalle3 = _isDalle3(options.config.model);
+      const isO1OrO3 =
+        options.config.model.startsWith("o1") ||
+        options.config.model.startsWith("o3");
 
-    console.log("[Request] openai payload: ", requestPayload);
-
-    const shouldStream = !isDalle3 && !!options.config.stream;
-    const controller = new AbortController();
-    options.onController?.(controller);
-
-    try {
-      let chatPath = "";
-      if (modelConfig.providerName === ServiceProvider.Azure) {
-        // find model, and get displayName as deployName
-        const { models: configModels, customModels: configCustomModels } =
-          useAppConfig.getState();
-        const {
-          defaultModel,
-          customModels: accessCustomModels,
-          useCustomConfig,
-        } = useAccessStore.getState();
-        const models = collectModelsWithDefaultModel(
-          configModels,
-          [configCustomModels, accessCustomModels].join(","),
-          defaultModel,
+      if (isDalle3) {
+        // DALL-E 3 logic remains the same, extracting the last text prompt
+        const prompt = getMessageTextContent(
+          options.messages.slice(-1)?.pop() as any, // Get last message text
         );
-        const model = models.find(
-          (model) =>
-            model.name === modelConfig.model &&
-            model?.provider?.providerName === ServiceProvider.Azure,
-        );
-        chatPath = this.path(
-          (isDalle3 ? Azure.ImagePath : Azure.ChatPath)(
-            (model?.displayName ?? model?.name) as string,
-            useCustomConfig ? useAccessStore.getState().azureApiVersion : "",
-          ),
-        );
+        requestPayload = {
+          model: options.config.model,
+          prompt,
+          response_format: "b64_json", // Use b64_json for caching
+          n: 1,
+          size: options.config?.size ?? "1024x1024",
+          quality: options.config?.quality ?? "standard",
+          style: options.config?.style ?? "vivid",
+        };
       } else {
-        chatPath = this.path(
-          isDalle3 ? OpenaiPath.ImagePath : OpenaiPath.ChatPath,
-        );
-      }
-      if (shouldStream) {
-        let index = -1;
-        const [tools, funcs] = usePluginStore
-          .getState()
-          .getAsTools(
-            useChatStore.getState().currentSession().mask?.plugin || [],
-          );
-        // console.log("getAsTools", tools, funcs);
-        streamWithThink(
-          chatPath,
-          requestPayload,
-          getHeaders(),
-          tools as any,
-          funcs,
-          controller,
-          // parseSSE
-          (text: string, runTools: ChatMessageTool[]) => {
-            // console.log("parseSSE", text, runTools);
-            const json = JSON.parse(text);
-            const choices = json.choices as Array<{
-              delta: {
-                content: string;
-                tool_calls: ChatMessageTool[];
-                reasoning_content: string | null;
-              };
-            }>;
+        // Logic for chat models (including vision)
+        const visionModel = isVisionModel(options.config.model);
+        const messages: ChatOptions["messages"] = [];
 
-            if (!choices?.length) return { isThinking: false, content: "" };
+        for (const v of options.messages) {
+          // The content received here should already be pre-processed (Base64 for images)
+          // by preProcessMultimodalContent called externally (e.g., in store/chat.ts)
+          let processedContent = v.content; // Assume content is already pre-processed
 
-            const tool_calls = choices[0]?.delta?.tool_calls;
-            if (tool_calls?.length > 0) {
-              const id = tool_calls[0]?.id;
-              const args = tool_calls[0]?.function?.arguments;
-              if (id) {
-                index += 1;
-                runTools.push({
-                  id,
-                  type: tool_calls[0]?.type,
-                  function: {
-                    name: tool_calls[0]?.function?.name as string,
-                    arguments: args,
-                  },
-                });
-              } else {
-                // @ts-ignore
-                runTools[index]["function"]["arguments"] += args;
+          // If the model supports vision and content is an array (potentially multimodal)
+          if (visionModel && Array.isArray(processedContent)) {
+            const finalContentParts: MultimodalContent[] = [];
+            for (const part of processedContent) {
+              if (part.type === 'text') {
+                finalContentParts.push(part);
+              } else if (part.type === 'image_url' && part.image_url?.url) {
+                const url = part.image_url.url;
+                if (url.startsWith('data:')) {
+                  // It's a Base64 Data URL, needs re-upload for OpenAI
+                  try {
+                    const mimeMatch = url.match(/data:(.*?);base64,/);
+                    const mimeType = mimeMatch ? mimeMatch[1] : 'image/png'; // Default MIME type
+                    const base64Data = url.split(',')[1];
+                    if (!base64Data) throw new Error("Empty base64 data");
+
+                    const blob = base64Image2Blob(base64Data, mimeType);
+                    // Call uploadImage to get a public URL (ensure uploadImage provides this)
+                    const publicUrl = await uploadImage(blob);
+                    finalContentParts.push({
+                      type: 'image_url',
+                      image_url: { url: publicUrl } // Use the public URL
+                    });
+                  } catch (error) {
+                    console.error("[OpenAI] Error re-uploading image:", error);
+                    finalContentParts.push({ type: 'text', text: '[Image Upload Error]' });
+                  }
+                } else {
+                  // If it's not Base64, assume it's already a usable public URL
+                  finalContentParts.push(part);
+                }
               }
+              // TODO: Handle file_url if OpenAI supports it and requires public URLs
+              // Similar logic: check if URL is cache URL, if so, re-upload to get public URL
             }
-
-            const reasoning = choices[0]?.delta?.reasoning_content;
-            const content = choices[0]?.delta?.content;
-
-            // Skip if both content and reasoning_content are empty or null
-            if (
-              (!reasoning || reasoning.length === 0) &&
-              (!content || content.length === 0)
-            ) {
-              return {
-                isThinking: false,
-                content: "",
-              };
+            // Filter out system messages for O1/O3 models
+            if (!(isO1OrO3 && v.role === "system")) {
+              messages.push({ role: v.role, content: finalContentParts });
             }
-
-            if (reasoning && reasoning.length > 0) {
-              return {
-                isThinking: true,
-                content: reasoning,
-              };
-            } else if (content && content.length > 0) {
-              return {
-                isThinking: false,
-                content: content,
-              };
+          } else {
+            // If not a vision model or content is just a string, get text content
+            const textContent = getMessageTextContent(v);
+            // Filter out system messages for O1/O3 models
+            if (!(isO1OrO3 && v.role === "system")) {
+              messages.push({ role: v.role, content: textContent });
             }
+          }
+        }
 
-            return {
-              isThinking: false,
-              content: "",
-            };
-          },
-          // processToolMessage, include tool_calls message and tool call results
-          (
-            requestPayload: RequestPayload,
-            toolCallMessage: any,
-            toolCallResult: any[],
-          ) => {
-            // reset index value
-            index = -1;
-            // @ts-ignore
-            requestPayload?.messages?.splice(
-              // @ts-ignore
-              requestPayload?.messages?.length,
-              0,
-              toolCallMessage,
-              ...toolCallResult,
-            );
-          },
-          options,
-        );
-      } else {
-        const chatPayload = {
-          method: "POST",
-          body: JSON.stringify(requestPayload),
-          signal: controller.signal,
-          headers: getHeaders(),
+        // Construct the payload for chat models
+        requestPayload = {
+          messages: messages as any, // Assert type after processing
+          stream: options.config.stream,
+          model: modelConfig.model,
+          temperature: !isO1OrO3 ? modelConfig.temperature : 1,
+          presence_penalty: !isO1OrO3 ? modelConfig.presence_penalty : 0,
+          frequency_penalty: !isO1OrO3 ? modelConfig.frequency_penalty : 0,
+          top_p: !isO1OrO3 ? modelConfig.top_p : 1,
         };
 
-        // make a fetch request
-        const requestTimeoutId = setTimeout(
-          () => controller.abort(),
-          getTimeoutMSByModel(options.config.model),
-        );
-
-        const res = await fetch(chatPath, chatPayload);
-        clearTimeout(requestTimeoutId);
-
-        const resJson = await res.json();
-        const message = await this.extractMessage(resJson);
-        options.onFinish(message, res);
+        // Use max_completion_tokens for O1/O3, max_tokens for others (especially vision)
+        if (isO1OrO3) {
+          requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
+        } else if (visionModel) {
+          // Add max_tokens specifically for vision models if needed, OpenAI default is usually sufficient
+           requestPayload["max_tokens"] = Math.max(modelConfig.max_tokens, 4000); // Example: ensure at least 4000 for vision
+        } else {
+           // For regular chat models, max_tokens is often optional unless specific control is needed
+           // requestPayload["max_tokens"] = modelConfig.max_tokens;
+        }
       }
-    } catch (e) {
-      console.log("[Request] failed to make a chat request", e);
-      options.onError?.(e as Error);
+
+      console.log("[Request] openai payload: ", requestPayload);
+
+      const shouldStream = !isDalle3 && !!options.config.stream;
+      const controller = new AbortController();
+      options.onController?.(controller);
+
+      try {
+        let chatPath = "";
+        // Determine the correct API path (Azure or OpenAI)
+        if (modelConfig.providerName === ServiceProvider.Azure) {
+          const { models: configModels, customModels: configCustomModels } =
+            useAppConfig.getState();
+          const {
+            defaultModel,
+            customModels: accessCustomModels,
+            useCustomConfig,
+            azureApiVersion, // Get Azure API version from access store
+          } = useAccessStore.getState();
+          const models = collectModelsWithDefaultModel(
+            configModels,
+            [configCustomModels, accessCustomModels].join(","),
+            defaultModel,
+          );
+          const modelInfo = models.find(
+            (m) =>
+              m.name === modelConfig.model &&
+              m?.provider?.providerName === ServiceProvider.Azure,
+          );
+          const deploymentName = modelInfo?.displayName ?? modelInfo?.name; // Use displayName as deployment name if available
+          if (!deploymentName) {
+             throw new Error(`Deployment name not found for Azure model: ${modelConfig.model}`);
+          }
+          const apiVersionToUse = useCustomConfig ? azureApiVersion : "2023-08-01-preview"; // Use configured or default version
+          chatPath = this.path(
+            (isDalle3 ? Azure.ImagePath : Azure.ChatPath)(
+              deploymentName,
+              apiVersionToUse,
+            ),
+          );
+        } else {
+          // OpenAI path
+          chatPath = this.path(
+            isDalle3 ? OpenaiPath.ImagePath : OpenaiPath.ChatPath,
+          );
+        }
+
+        // Handle streaming or non-streaming request
+        if (shouldStream) {
+          let index = -1;
+          const [tools, funcs] = usePluginStore
+            .getState()
+            .getAsTools(
+              useChatStore.getState().currentSession().mask?.plugin || [],
+            );
+          streamWithThink(
+            chatPath,
+            requestPayload, // Pass the correct payload type (RequestPayload)
+            getHeaders(),
+            tools as any, // Cast tools if necessary, ensure format matches API
+            funcs,
+            controller,
+            // parseSSE - Handles OpenAI's SSE format
+            (text: string, runTools: ChatMessageTool[]) => {
+              let json;
+              try {
+                 json = JSON.parse(text);
+              } catch (e) {
+                 console.error("[OpenAI SSE Parse Error]", text, e);
+                 return { isThinking: false, content: "" };
+              }
+
+              const choices = json.choices as Array<{
+                delta: {
+                  content: string | null;
+                  tool_calls?: ChatMessageTool[];
+                  // reasoning_content?: string | null; // OpenAI doesn't typically send this
+                };
+              }>;
+
+              if (!choices?.length) return { isThinking: false, content: "" };
+
+              const delta = choices[0]?.delta;
+              const tool_calls = delta?.tool_calls;
+              // const reasoning = delta?.reasoning_content;
+              const content = delta?.content;
+
+              if (tool_calls?.length > 0) {
+                // Handle tool call aggregation
+                const tool = tool_calls[0];
+                const toolIndex = tool.index; // OpenAI uses index for aggregation
+                const id = tool.id;
+                const args = tool.function?.arguments;
+                if (id && toolIndex !== undefined) { // Start of a new tool call
+                   // Ensure index is within bounds or push new
+                   if (toolIndex >= runTools.length) {
+                      runTools.push({
+                        id,
+                        type: tool.type,
+                        function: { name: tool.function!.name, arguments: args || "" },
+                      });
+                   } else {
+                      // Replace if index exists (shouldn't happen for start?)
+                      runTools[toolIndex] = {
+                        id,
+                        type: tool.type,
+                        function: { name: tool.function!.name, arguments: args || "" },
+                      };
+                   }
+                } else if (toolIndex !== undefined && runTools[toolIndex]) { // Aggregating arguments
+                   runTools[toolIndex].function!.arguments += args || "";
+                } else {
+                   console.warn("[OpenAI] Tool call aggregation error: missing id/index or index out of bounds", tool);
+                }
+              }
+
+              // if (reasoning && reasoning.length > 0) {
+              //   return { isThinking: true, content: reasoning };
+              // } else
+              if (content && content.length > 0) {
+                return { isThinking: false, content: content };
+              }
+
+              return { isThinking: false, content: "" };
+            },
+            // processToolMessage - Appends tool call and results for OpenAI format
+            (
+              requestPayload: RequestPayload, // Correct type
+              toolCallMessage: any, // assistant message with tool_calls
+              toolCallResult: any[], // array of tool messages
+            ) => {
+              index = -1; // Reset index
+              requestPayload?.messages?.push(
+                toolCallMessage, // Assistant message with tool calls
+                ...toolCallResult, // Tool messages with results
+              );
+            },
+            options,
+          );
+        } else {
+          // Non-streaming request (Chat or DALL-E)
+          const chatPayload = {
+            method: "POST",
+            body: JSON.stringify(requestPayload),
+            signal: controller.signal,
+            headers: getHeaders(),
+          };
+
+          const requestTimeoutId = setTimeout(
+            () => controller.abort(),
+            getTimeoutMSByModel(options.config.model), // Use model-specific timeout
+          );
+
+          const res = await fetch(chatPath, chatPayload); // Use global or imported fetch
+          clearTimeout(requestTimeoutId);
+
+          const resJson = await res.json();
+
+          if (resJson.error) {
+             console.error("OpenAI API Error:", resJson.error);
+             options.onError?.(new Error(resJson.error.message || "OpenAI API error"));
+             return;
+          }
+
+          // Extract message handles both chat and DALL-E responses
+          const message = await this.extractMessage(resJson);
+          options.onFinish(message, res);
+        }
+      } catch (e) {
+        console.log("[Request] failed to make a chat request", e);
+        options.onError?.(e as Error);
+      }
     }
-  }
+
   async usage() {
     const formatDate = (d: Date) =>
       `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d

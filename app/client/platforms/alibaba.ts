@@ -7,10 +7,8 @@ import {
   ChatMessageTool,
   usePluginStore,
 } from "@/app/store";
-import {
-  preProcessImageContentForAlibabaDashScope,
-  streamWithThink,
-} from "@/app/utils/chat";
+import { preProcessMultimodalContent, streamWithThink } from "@/app/utils/chat";
+
 import {
   ChatOptions,
   getHeaders,
@@ -104,30 +102,56 @@ export class QwenApi implements LLMApi {
 
     const visionModel = isVisionModel(options.config.model);
 
-    const messages: ChatOptions["messages"] = [];
-    for (const v of options.messages) {
-      const content = (
-        visionModel
-          ? await preProcessImageContentForAlibabaDashScope(v.content)
-          : v.role === "assistant"
-          ? getMessageTextContentWithoutThinking(v)
-          : getMessageTextContent(v)
-      ) as any;
+    // messages 直接使用 options.messages，预处理已在外部完成
+    // 但需要在这里根据 API 要求转换 content 格式
+    const messages = options.messages.map(v => {
+        const role = v.role;
+        let content: string | MultimodalContentForAlibaba[]; // API 期望的格式
 
-      messages.push({ role: v.role, content });
-    }
+        if (typeof v.content === 'string' || !visionModel) {
+            // 如果是字符串或非视觉模型，获取纯文本
+            content = v.role === "assistant"
+                      ? getMessageTextContentWithoutThinking(v)
+                      : getMessageTextContent(v);
+        } else {
+            // 处理 MultimodalContent[]
+            content = v.content.map(part => {
+                if (part.type === 'text') {
+                    return { text: part.text ?? "" };
+                } else if (part.type === 'image_url' && part.image_url?.url?.startsWith('data:')) {
+                    // 图像部分，直接使用 Base64 URL
+                    return { image: part.image_url.url };
+                } else {
+                    // 其他类型或无效图像 URL，转换为文本提示
+                    const description = part.type === 'image_url' ? 'Image' : part.file_url?.name ?? 'File';
+                    console.warn(`[Alibaba] Omitting or invalid content part: ${description}`);
+                    return { text: `[${description} content omitted or invalid]` };
+                }
+            }).filter(item => item.text !== undefined || item.image !== undefined); // 过滤掉无效转换结果
+
+            // 如果处理后只剩下一个文本部分，简化为字符串
+            if (content.length === 1 && content[0].text !== undefined) {
+               content = content[0].text;
+            }
+            // 如果处理后为空数组 (例如只有无效部分)，则设为空字符串或提示
+            if (content.length === 0) {
+               content = "[Empty message content after processing]";
+            }
+        }
+        return { role, content };
+    });
 
     const shouldStream = !!options.config.stream;
     const requestPayload: RequestPayload = {
       model: modelConfig.model,
       input: {
-        messages,
+        messages: messages as any, // 需要断言，因为 content 类型已转换
       },
       parameters: {
         result_format: "message",
         incremental_output: shouldStream,
         temperature: modelConfig.temperature,
-        // max_tokens: modelConfig.max_tokens,
+        // max_tokens: modelConfig.max_tokens, // 通常由模型决定或在流式传输中不直接设置
         top_p: modelConfig.top_p === 1 ? 0.99 : modelConfig.top_p, // qwen top_p is should be < 1
       },
     };
@@ -170,9 +194,15 @@ export class QwenApi implements LLMApi {
           controller,
           // parseSSE
           (text: string, runTools: ChatMessageTool[]) => {
-            // console.log("parseSSE", text, runTools);
-            const json = JSON.parse(text);
-            const choices = json.output.choices as Array<{
+            let json;
+            try {
+               json = JSON.parse(text);
+            } catch (e) {
+               console.error("[Alibaba SSE Parse Error]", text, e);
+               return { isThinking: false, content: "" }; // Return empty on parse error
+            }
+
+            const choices = json.output?.choices as Array<{
               message: {
                 content: string | null | MultimodalContentForAlibaba[];
                 tool_calls: ChatMessageTool[];
@@ -184,21 +214,22 @@ export class QwenApi implements LLMApi {
 
             const tool_calls = choices[0]?.message?.tool_calls;
             if (tool_calls?.length > 0) {
-              const index = tool_calls[0]?.index;
+              const index = tool_calls[0]?.index; // Assuming index is for aggregation
               const id = tool_calls[0]?.id;
               const args = tool_calls[0]?.function?.arguments;
-              if (id) {
+              if (id) { // Start of a new tool call
                 runTools.push({
                   id,
                   type: tool_calls[0]?.type,
                   function: {
                     name: tool_calls[0]?.function?.name as string,
-                    arguments: args,
+                    arguments: args || "", // Initialize arguments
                   },
                 });
+              } else if (index !== undefined && runTools[index]) { // Aggregating arguments
+                runTools[index].function!.arguments += args || "";
               } else {
-                // @ts-ignore
-                runTools[index]["function"]["arguments"] += args;
+                 console.warn("[Alibaba] Tool call aggregation error: missing id or index", tool_calls[0]);
               }
             }
 
@@ -208,7 +239,7 @@ export class QwenApi implements LLMApi {
             // Skip if both content and reasoning_content are empty or null
             if (
               (!reasoning || reasoning.length === 0) &&
-              (!content || content.length === 0)
+              (!content || (Array.isArray(content) && content.length === 0) || (typeof content === 'string' && content.length === 0))
             ) {
               return {
                 isThinking: false,
@@ -221,12 +252,12 @@ export class QwenApi implements LLMApi {
                 isThinking: true,
                 content: reasoning,
               };
-            } else if (content && content.length > 0) {
+            } else if (content) {
               return {
                 isThinking: false,
                 content: Array.isArray(content)
-                  ? content.map((item) => item.text).join(",")
-                  : content,
+                  ? content.map((item) => item.text ?? "").join("") // Extract and join text from array
+                  : content, // Use string content directly
               };
             }
 
@@ -241,9 +272,8 @@ export class QwenApi implements LLMApi {
             toolCallMessage: any,
             toolCallResult: any[],
           ) => {
-            requestPayload?.input?.messages?.splice(
-              requestPayload?.input?.messages?.length,
-              0,
+            // Append tool call message and results to the input messages
+            requestPayload?.input?.messages?.push(
               toolCallMessage,
               ...toolCallResult,
             );
@@ -251,10 +281,18 @@ export class QwenApi implements LLMApi {
           options,
         );
       } else {
-        const res = await fetch(chatPath, chatPayload);
+        // Non-streaming request
+        const res = await fetch(chatPath, chatPayload); // Use global or imported fetch
         clearTimeout(requestTimeoutId);
 
         const resJson = await res.json();
+
+        if (resJson.code) { // Check for API errors
+           console.error("Alibaba API Error:", resJson);
+           options.onError?.(new Error(resJson.message || `Alibaba API Error Code: ${resJson.code}`));
+           return;
+        }
+
         const message = this.extractMessage(resJson);
         options.onFinish(message, res);
       }
@@ -263,6 +301,7 @@ export class QwenApi implements LLMApi {
       options.onError?.(e as Error);
     }
   }
+
   async usage() {
     return {
       used: 0,

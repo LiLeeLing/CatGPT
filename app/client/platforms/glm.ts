@@ -23,7 +23,7 @@ import {
 } from "@/app/utils";
 import { RequestPayload } from "./openai";
 import { fetch } from "@/app/utils/stream";
-import { preProcessImageContent } from "@/app/utils/chat";
+import { preProcessMultimodalContent } from "@/app/utils/chat";
 
 interface BasePayload {
   model: string;
@@ -153,131 +153,180 @@ export class ChatGLMApi implements LLMApi {
     throw new Error("Method not implemented.");
   }
 
-  async chat(options: ChatOptions) {
-    const visionModel = isVisionModel(options.config.model);
-    const messages: ChatOptions["messages"] = [];
-    for (const v of options.messages) {
-      const content = visionModel
-        ? await preProcessImageContent(v.content)
-        : getMessageTextContent(v);
-      messages.push({ role: v.role, content });
-    }
+    async chat(options: ChatOptions) {
+      const visionModel = isVisionModel(options.config.model);
 
-    const modelConfig = {
-      ...useAppConfig.getState().modelConfig,
-      ...useChatStore.getState().currentSession().mask.modelConfig,
-      ...{
-        model: options.config.model,
-        providerName: options.config.providerName,
-      },
-    };
-    const modelType = this.getModelType(modelConfig.model);
-    const requestPayload = this.createPayload(messages, modelConfig, options);
-    const path = this.path(this.getModelPath(modelType));
-
-    console.log(`[Request] glm ${modelType} payload: `, requestPayload);
-
-    const controller = new AbortController();
-    options.onController?.(controller);
-
-    try {
-      const chatPayload = {
-        method: "POST",
-        body: JSON.stringify(requestPayload),
-        signal: controller.signal,
-        headers: getHeaders(),
-      };
-
-      const requestTimeoutId = setTimeout(
-        () => controller.abort(),
-        getTimeoutMSByModel(options.config.model),
-      );
-
-      if (modelType === "image" || modelType === "video") {
-        const res = await fetch(path, chatPayload);
-        clearTimeout(requestTimeoutId);
-
-        const resJson = await res.json();
-        console.log(`[Response] glm ${modelType}:`, resJson);
-        const message = this.parseResponse(modelType, resJson);
-        options.onFinish(message, res);
-        return;
-      }
-
-      const shouldStream = !!options.config.stream;
-      if (shouldStream) {
-        const [tools, funcs] = usePluginStore
-          .getState()
-          .getAsTools(
-            useChatStore.getState().currentSession().mask?.plugin || [],
-          );
-        return stream(
-          path,
-          requestPayload,
-          getHeaders(),
-          tools as any,
-          funcs,
-          controller,
-          // parseSSE
-          (text: string, runTools: ChatMessageTool[]) => {
-            const json = JSON.parse(text);
-            const choices = json.choices as Array<{
-              delta: {
-                content: string;
-                tool_calls: ChatMessageTool[];
+      // messages 直接使用 options.messages，预处理已在外部完成
+      // 但需要根据模型能力过滤或转换 content
+      const messages = options.messages.map(v => {
+          if (!visionModel && typeof v.content !== 'string') {
+              // 如果模型不支持视觉，且 content 不是字符串，则提取文本
+              return {
+                  role: v.role,
+                  content: getMessageTextContent(v)
               };
-            }>;
-            const tool_calls = choices[0]?.delta?.tool_calls;
-            if (tool_calls?.length > 0) {
-              const index = tool_calls[0]?.index;
-              const id = tool_calls[0]?.id;
-              const args = tool_calls[0]?.function?.arguments;
-              if (id) {
-                runTools.push({
-                  id,
-                  type: tool_calls[0]?.type,
-                  function: {
-                    name: tool_calls[0]?.function?.name as string,
-                    arguments: args,
-                  },
-                });
-              } else {
-                // @ts-ignore
-                runTools[index]["function"]["arguments"] += args;
-              }
-            }
-            return choices[0]?.delta?.content;
-          },
-          // processToolMessage
-          (
-            requestPayload: RequestPayload,
-            toolCallMessage: any,
-            toolCallResult: any[],
-          ) => {
-            // @ts-ignore
-            requestPayload?.messages?.splice(
-              // @ts-ignore
-              requestPayload?.messages?.length,
-              0,
-              toolCallMessage,
-              ...toolCallResult,
-            );
-          },
-          options,
-        );
-      } else {
-        const res = await fetch(path, chatPayload);
-        clearTimeout(requestTimeoutId);
+          } else if (visionModel && Array.isArray(v.content)) {
+              // 如果是视觉模型且 content 是数组，检查并处理 Base64
+              // TODO: 确认 ChatGLM API (glm-4v) 接受的格式，可能需要转换
+              const processedParts = v.content.map(part => {
+                  if (part.type === 'image_url' && part.image_url?.url?.startsWith('data:')) {
+                      // 假设 API 接受 { type: "image_url", image_url: { url: "data:..." } }
+                      // 如果需要转换，在这里进行
+                      return part;
+                  }
+                  return part; // 保留 text 或其他部分
+              });
+              return { ...v, content: processedParts };
+          }
+          // 对于视觉模型下的纯文本消息，或非视觉模型下的纯文本消息，直接使用
+          return v;
+      });
 
-        const resJson = await res.json();
-        const message = this.extractMessage(resJson);
-        options.onFinish(message, res);
+      const modelConfig = {
+        ...useAppConfig.getState().modelConfig,
+        ...useChatStore.getState().currentSession().mask.modelConfig,
+        ...{
+          model: options.config.model,
+          providerName: options.config.providerName,
+        },
+      };
+      const modelType = this.getModelType(modelConfig.model);
+      // 使用处理过的 messages 创建 payload
+      const requestPayload = this.createPayload(messages, modelConfig, options);
+      const path = this.path(this.getModelPath(modelType));
+
+      console.log(`[Request] glm ${modelType} payload: `, requestPayload);
+
+      const controller = new AbortController();
+      options.onController?.(controller);
+
+      try {
+        const chatPayload = {
+          method: "POST",
+          body: JSON.stringify(requestPayload),
+          signal: controller.signal,
+          headers: getHeaders(),
+        };
+
+        const requestTimeoutId = setTimeout(
+          () => controller.abort(),
+          getTimeoutMSByModel(options.config.model),
+        );
+
+        // Handle image/video generation (non-streaming)
+        if (modelType === "image" || modelType === "video") {
+          const res = await fetch(path, chatPayload); // Use global or imported fetch
+          clearTimeout(requestTimeoutId);
+
+          const resJson = await res.json();
+          console.log(`[Response] glm ${modelType}:`, resJson);
+
+          // TODO: 确认 ChatGLM API 的错误格式
+          if (resJson.error) {
+             console.error(`ChatGLM ${modelType} Error:`, resJson.error);
+             options.onError?.(new Error(resJson.error.message || `ChatGLM ${modelType} error`));
+             return;
+          }
+
+          const message = this.parseResponse(modelType, resJson);
+          options.onFinish(message, res);
+          return;
+        }
+
+        // Handle chat completion (streaming or non-streaming)
+        const shouldStream = !!options.config.stream;
+        if (shouldStream) {
+          const [tools, funcs] = usePluginStore
+            .getState()
+            .getAsTools(
+              useChatStore.getState().currentSession().mask?.plugin || [],
+            );
+          // 假设 ChatGLM API 结构类似 OpenAI，使用 stream
+          return stream( // ChatGLM 可能不支持 streamWithThink
+            path,
+            requestPayload, // 传递的是 ChatPayload
+            getHeaders(),
+            tools as any, // TODO: 确认 ChatGLM API 的 tools 格式
+            funcs,
+            controller,
+            // parseSSE - 假设类似 OpenAI
+            (text: string, runTools: ChatMessageTool[]) => {
+              let json;
+              try {
+                 json = JSON.parse(text);
+              } catch (e) {
+                 console.error("[ChatGLM SSE Parse Error]", text, e);
+                 return undefined;
+              }
+
+              const choices = json.choices as Array<{
+                delta: {
+                  content: string | null;
+                  tool_calls?: ChatMessageTool[];
+                };
+              }>;
+
+              if (!choices?.length) return undefined;
+
+              const delta = choices[0]?.delta;
+              const tool_calls = delta?.tool_calls;
+              const content = delta?.content;
+
+              if (tool_calls?.length > 0) {
+                // 处理工具调用逻辑
+                const tool = tool_calls[0];
+                const index = tool.index;
+                const id = tool.id;
+                const args = tool.function?.arguments;
+                if (id) {
+                   runTools.push({
+                     id,
+                     type: tool.type,
+                     function: { name: tool.function!.name, arguments: args || "" },
+                   });
+                } else if (index !== undefined && runTools[index]) {
+                   runTools[index].function!.arguments += args || "";
+                }
+              }
+
+              return content ?? undefined; // 返回 content 或 undefined
+            },
+            // processToolMessage - 假设类似 OpenAI
+            (
+              reqPayload: ChatPayload, // 使用 ChatPayload 类型
+              toolCallMessage: any,
+              toolCallResult: any[],
+            ) => {
+              reqPayload?.messages?.push(
+                toolCallMessage,
+                ...toolCallResult,
+              );
+            },
+            options,
+          );
+        } else {
+          // Non-streaming chat request
+          const res = await fetch(path, chatPayload); // Use global or imported fetch
+          clearTimeout(requestTimeoutId);
+
+          const resJson = await res.json();
+
+          // TODO: 确认 ChatGLM API 的错误格式
+          if (resJson.error) {
+             console.error("ChatGLM API Error:", resJson.error);
+             options.onError?.(new Error(resJson.error.message || "ChatGLM API error"));
+             return;
+          }
+
+          const message = this.extractMessage(resJson);
+          options.onFinish(message, res);
+        }
+      } catch (e) {
+        console.log("[Request] failed to make a chat request", e);
+        options.onError?.(e as Error);
       }
-    } catch (e) {
-      console.log("[Request] failed to make a chat request", e);
-      options.onError?.(e as Error);
     }
-  }
+
 
   async usage() {
     return {
